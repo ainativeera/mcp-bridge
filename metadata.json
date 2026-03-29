@@ -1,0 +1,5 @@
+{
+  "name": "MCP Bridge",
+  "description": "A modern HTTP proxy gateway for Model Context Protocol (MCP), enabling AI models to interact with any API.",
+  "requestFramePermissions": []
+}

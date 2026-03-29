@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+dist-electron/
+release/
+coverage/
+.DS_Store
+*.log
+mcp_bridge.db
+mcp_bridge.db-shm
+mcp_bridge.db-wal
+.env*
+!.env.example

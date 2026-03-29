@@ -1,0 +1,95 @@
+{
+  "name": "mcp-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "description": "将任意 curl 请求转换成智能体可调用的 MCP 服务接口",
+  "author": "MCP Bridge Team",
+  "type": "module",
+  "main": "dist-electron/electron-main.js",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "electron:dev": "npm run build:electron && env -u ELECTRON_RUN_AS_NODE -u ELECTRON_FORCE_IS_PACKAGED electron .",
+    "build:web": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json && node scripts/prepare-electron-dist.cjs",
+    "build": "npm run build:web && npm run build:electron",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:all": "npm run build && electron-builder --mac --win",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/better-sqlite3": "^7.6.13",
+    "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^12.6.2",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.3.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.36.0",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.5.0",
+    "uuid": "^13.0.0",
+    "vite": "^6.2.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.4.21",
+    "electron": "^30.0.0",
+    "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  },
+  "build": {
+    "appId": "com.mcp.bridge",
+    "productName": "MCP Bridge",
+    "copyright": "Copyright © 2026",
+    "directories": {
+      "output": "release"
+    },
+    "npmRebuild": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "mcp_bridge.db",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

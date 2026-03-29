@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mcp-bridge:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - DB_PATH=./mcp_bridge.db
+      - API_KEY=${API_KEY}
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=100
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - LOG_LEVEL=info
+    volumes:
+      - ./mcp_bridge.db:/app/mcp_bridge.db
+      - ./mcp_bridge.db-shm:/app/mcp_bridge.db-shm
+      - ./mcp_bridge.db-wal:/app/mcp_bridge.db-wal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
