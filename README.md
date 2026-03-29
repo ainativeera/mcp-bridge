@@ -1,5 +1,7 @@
 # MCP Bridge
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 Turn internal APIs and cURL workflows into local MCP tools for AI agents.
 
 MCP Bridge helps teams convert existing HTTP operations into tools that Claude Desktop, Cursor, Zed, and other MCP clients can call through a local server. The project is designed for real-world office automation scenarios where users already have working cURL commands and want to make them safe, reusable, and agent-friendly.
