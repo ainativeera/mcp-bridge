@@ -1,0 +1,111 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="900" rx="32" fill="#09090B"/>
+  <rect x="32" y="32" width="1376" height="836" rx="28" fill="#111116" stroke="#27272A"/>
+  <rect x="72" y="72" width="1296" height="72" rx="20" fill="#18181B" stroke="#27272A"/>
+  <rect x="112" y="92" width="56" height="56" rx="18" fill="url(#paint0_linear)"/>
+  <path d="M145 105L126 130H145L135 161L173 122H152L161 105H145Z" fill="white"/>
+  <text x="188" y="118" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">MCP Bridge</text>
+  <text x="188" y="146" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="15" letter-spacing="6">DESKTOP WORKSPACE</text>
+  <rect x="1120" y="92" width="96" height="32" rx="16" fill="#18181B" stroke="#3F3F46"/>
+  <circle cx="1146" cy="108" r="8" fill="#A855F7"/>
+  <text x="1162" y="114" fill="#D4D4D8" font-family="Arial, Helvetica, sans-serif" font-size="14">Light</text>
+  <rect x="1234" y="92" width="94" height="32" rx="16" fill="#18181B" stroke="#3F3F46"/>
+  <text x="1258" y="113" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="13">192.168.1.9</text>
+
+  <rect x="72" y="172" width="332" height="636" rx="24" fill="#121218" stroke="#27272A"/>
+  <rect x="104" y="204" width="268" height="64" rx="18" fill="#0D0D12" stroke="#27272A"/>
+  <text x="128" y="227" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="11" font-weight="700" letter-spacing="2">WORKSPACE</text>
+  <text x="128" y="250" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700">Tools &amp; Config</text>
+  <circle cx="330" cy="236" r="8" fill="#10B981"/>
+  <circle cx="354" cy="236" r="8" fill="#10B981"/>
+
+  <rect x="104" y="292" width="268" height="122" rx="18" fill="#0D0D12" stroke="#27272A"/>
+  <text x="128" y="322" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">MCP CONFIG</text>
+  <text x="128" y="371" fill="#C084FC" font-family="Courier New, monospace" font-size="18">http://192.168.1.9:3000/sse</text>
+  <circle cx="332" cy="360" r="18" fill="#18181B"/>
+  <path d="M327 360H337M332 355V365" stroke="#A1A1AA" stroke-width="2" stroke-linecap="round"/>
+
+  <rect x="104" y="442" width="212" height="56" rx="18" fill="url(#paint1_linear)"/>
+  <text x="141" y="476" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">+  New Tool</text>
+  <rect x="326" y="442" width="46" height="56" rx="18" fill="#27272A" stroke="#52525B"/>
+  <path d="M348 461H359V479H340V470" stroke="#D4D4D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M352 455V466H363" stroke="#D4D4D8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="104" y="518" width="268" height="52" rx="18" fill="#27272A" stroke="#3F3F46"/>
+  <text x="144" y="550" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">Import cURL</text>
+  <path d="M128 539L138 549L128 559" stroke="#A1A1AA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="104" y="596" width="268" height="54" rx="18" fill="#27272A"/>
+  <circle cx="136" cy="623" r="10" stroke="#71717A" stroke-width="3"/>
+  <path d="M143 630L151 638" stroke="#71717A" stroke-width="3" stroke-linecap="round"/>
+  <text x="162" y="629" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="15">Search tools...</text>
+
+  <text x="104" y="694" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">DEFAULT</text>
+  <rect x="104" y="716" width="268" height="70" rx="18" fill="#27272A"/>
+  <text x="128" y="744" fill="#FBBF24" font-family="Courier New, monospace" font-size="20" font-weight="700">POST</text>
+  <text x="210" y="744" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Employee Approval</text>
+  <text x="210" y="770" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="14">Internal workflow tool</text>
+
+  <rect x="432" y="172" width="656" height="636" rx="24" fill="#0F0F15" stroke="#27272A"/>
+  <rect x="472" y="212" width="576" height="70" rx="18" fill="#15151C" stroke="#27272A"/>
+  <text x="504" y="239" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">employee_approval_submit</text>
+  <text x="504" y="266" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="15">Approve office workflows through a clean MCP tool definition</text>
+  <rect x="844" y="228" width="92" height="38" rx="12" fill="#18181B" stroke="#3F3F46"/>
+  <text x="873" y="252" fill="#D4D4D8" font-family="Arial, Helvetica, sans-serif" font-size="14">默认</text>
+  <rect x="952" y="228" width="96" height="38" rx="12" fill="#10B981"/>
+  <text x="984" y="252" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="700">保存</text>
+
+  <rect x="472" y="316" width="104" height="54" rx="16" fill="#18181B" stroke="#27272A"/>
+  <text x="506" y="349" fill="#FBBF24" font-family="Courier New, monospace" font-size="20" font-weight="700">POST</text>
+  <rect x="596" y="316" width="452" height="54" rx="16" fill="#15151C" stroke="#27272A"/>
+  <text x="626" y="349" fill="#A1A1AA" font-family="Courier New, monospace" font-size="17">https://api.company.com/approve/{{requestId}}</text>
+
+  <rect x="472" y="400" width="576" height="138" rx="18" fill="#15151C" stroke="#27272A"/>
+  <text x="500" y="430" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">AI DESCRIPTION</text>
+  <text x="500" y="468" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="18">Submit an approval decision to the internal office workflow system.</text>
+  <text x="500" y="500" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="15">Use this when an agent needs to approve or reject a pending item on behalf of a user.</text>
+
+  <rect x="472" y="566" width="576" height="58" rx="16" fill="#0D0D12" stroke="#27272A"/>
+  <rect x="488" y="582" width="90" height="26" rx="13" fill="#6D28D9"/>
+  <text x="511" y="599" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">Parameters</text>
+  <text x="614" y="600" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="13">Headers</text>
+  <text x="694" y="600" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="13">Body</text>
+  <text x="754" y="600" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="13">Output</text>
+  <text x="830" y="600" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="13">Logs</text>
+
+  <rect x="472" y="646" width="576" height="130" rx="18" fill="#15151C" stroke="#27272A"/>
+  <text x="500" y="680" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">PARAMETER EXTRACTION</text>
+  <text x="500" y="720" fill="#C084FC" font-family="Courier New, monospace" font-size="18">requestId</text>
+  <text x="680" y="720" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="16">string</text>
+  <text x="792" y="720" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="16">required</text>
+  <text x="912" y="720" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="15">Approval request ID</text>
+
+  <rect x="1116" y="172" width="252" height="636" rx="24" fill="#121218" stroke="#27272A"/>
+  <text x="1148" y="214" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">DEBUG PANEL</text>
+  <rect x="1148" y="236" width="188" height="44" rx="14" fill="#10B981"/>
+  <text x="1202" y="263" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">Run Test</text>
+
+  <text x="1148" y="328" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">MOCK PARAMETERS</text>
+  <text x="1148" y="360" fill="#C084FC" font-family="Courier New, monospace" font-size="16">requestId</text>
+  <rect x="1148" y="376" width="188" height="48" rx="14" fill="#15151C" stroke="#27272A"/>
+  <text x="1170" y="406" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="14">REQ-2026-00031</text>
+
+  <text x="1148" y="476" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">RESPONSE</text>
+  <rect x="1148" y="496" width="188" height="160" rx="16" fill="#0D0D12" stroke="#27272A"/>
+  <text x="1172" y="526" fill="#10B981" font-family="Courier New, monospace" font-size="14">{</text>
+  <text x="1188" y="548" fill="#10B981" font-family="Courier New, monospace" font-size="14">"status": "approved",</text>
+  <text x="1188" y="572" fill="#10B981" font-family="Courier New, monospace" font-size="14">"approver": "AI Agent",</text>
+  <text x="1188" y="596" fill="#10B981" font-family="Courier New, monospace" font-size="14">"id": "REQ-2026-00031"</text>
+  <text x="1172" y="620" fill="#10B981" font-family="Courier New, monospace" font-size="14">}</text>
+
+  <defs>
+    <linearGradient id="paint0_linear" x1="112" y1="92" x2="168" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#D946EF"/>
+    </linearGradient>
+    <linearGradient id="paint1_linear" x1="104" y1="442" x2="316" y2="498" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#D946EF"/>
+    </linearGradient>
+  </defs>
+</svg>

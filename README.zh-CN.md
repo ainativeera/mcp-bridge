@@ -32,7 +32,17 @@ MCP Bridge 帮助团队把现有 HTTP 操作封装成 Claude Desktop、Cursor、
 
 ## 截图
 
-等界面进一步稳定后，建议在这里补充截图或演示 GIF。对于开源项目首页来说，直观的视觉预览很有帮助。
+### 产品总览
+
+![MCP Bridge 总览](./docs/assets/overview-hero.svg)
+
+### cURL 转 MCP 工作流
+
+![cURL 导入工作流](./docs/assets/curl-import-flow.svg)
+
+### 本地 MCP 配置面板
+
+![MCP 配置面板](./docs/assets/mcp-config-panel.svg)
 
 ## 架构
 

@@ -1,0 +1,48 @@
+<svg width="1440" height="620" viewBox="0 0 1440 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="620" rx="28" fill="#0A0A0F"/>
+  <rect x="40" y="40" width="1360" height="540" rx="24" fill="#111116" stroke="#27272A"/>
+  <text x="72" y="102" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">Import existing cURL into an MCP-ready tool</text>
+  <text x="72" y="140" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="18">Bridge raw HTTP requests into structured parameters, safer descriptions, and reusable agent tools.</text>
+
+  <rect x="72" y="188" width="388" height="332" rx="22" fill="#0D0D12" stroke="#27272A"/>
+  <text x="104" y="226" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">RAW CURL INPUT</text>
+  <rect x="104" y="250" width="324" height="238" rx="16" fill="#15151C" stroke="#27272A"/>
+  <text x="128" y="286" fill="#D4D4D8" font-family="Courier New, monospace" font-size="16">curl 'https://api.company.com/approve'</text>
+  <text x="128" y="316" fill="#D4D4D8" font-family="Courier New, monospace" font-size="16">-H 'Authorization: Bearer ***'</text>
+  <text x="128" y="346" fill="#D4D4D8" font-family="Courier New, monospace" font-size="16">-H 'Content-Type: application/json'</text>
+  <text x="128" y="376" fill="#D4D4D8" font-family="Courier New, monospace" font-size="16">--data '{"requestId":"123","action":"approve"}'</text>
+
+  <rect x="532" y="262" width="376" height="184" rx="22" fill="#13131A" stroke="#3F3F46"/>
+  <text x="564" y="302" fill="#C084FC" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Auto Transform</text>
+  <text x="564" y="338" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="18">• Detect method, URL, headers, and body</text>
+  <text x="564" y="372" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="18">• Extract dynamic placeholders as MCP params</text>
+  <text x="564" y="406" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="18">• Generate safer tool descriptions for agents</text>
+
+  <path d="M470 354H512" stroke="url(#paint0_linear)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M908 354H950" stroke="url(#paint1_linear)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M500 334L528 354L500 374" stroke="url(#paint0_linear)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M938 334L966 354L938 374" stroke="url(#paint1_linear)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="980" y="188" width="388" height="332" rx="22" fill="#0D0D12" stroke="#27272A"/>
+  <text x="1012" y="226" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">MCP TOOL OUTPUT</text>
+  <rect x="1012" y="250" width="324" height="238" rx="16" fill="#15151C" stroke="#27272A"/>
+  <text x="1036" y="286" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">employee_approval_submit</text>
+  <rect x="1036" y="312" width="72" height="28" rx="14" fill="#6D28D9"/>
+  <text x="1058" y="331" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">POST</text>
+  <text x="1036" y="372" fill="#C084FC" font-family="Courier New, monospace" font-size="16">requestId</text>
+  <text x="1138" y="372" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="15">string • required</text>
+  <text x="1036" y="406" fill="#C084FC" font-family="Courier New, monospace" font-size="16">action</text>
+  <text x="1138" y="406" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="15">enum: approve | reject</text>
+  <text x="1036" y="448" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="16">Ready for local MCP exposure and agent execution.</text>
+
+  <defs>
+    <linearGradient id="paint0_linear" x1="470" y1="354" x2="528" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#D946EF"/>
+    </linearGradient>
+    <linearGradient id="paint1_linear" x1="908" y1="354" x2="966" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#D946EF"/>
+    </linearGradient>
+  </defs>
+</svg>

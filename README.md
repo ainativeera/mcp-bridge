@@ -32,7 +32,17 @@ MCP Bridge helps teams convert existing HTTP operations into tools that Claude D
 
 ## Screenshots
 
-Add screenshots or a short demo GIF here once the UI is stable. A strong open source landing page benefits a lot from a quick visual preview.
+### Product overview
+
+![MCP Bridge overview](./docs/assets/overview-hero.svg)
+
+### cURL to MCP workflow
+
+![cURL import workflow](./docs/assets/curl-import-flow.svg)
+
+### Local MCP configuration
+
+![MCP config panel](./docs/assets/mcp-config-panel.svg)
 
 ## Architecture
 

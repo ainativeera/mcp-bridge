@@ -1,0 +1,30 @@
+<svg width="1440" height="560" viewBox="0 0 1440 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="560" rx="28" fill="#09090B"/>
+  <rect x="40" y="40" width="1360" height="480" rx="24" fill="#111116" stroke="#27272A"/>
+  <text x="72" y="98" fill="#FAFAFA" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">Local MCP configuration designed for desktop AI tools</text>
+  <text x="72" y="136" fill="#A1A1AA" font-family="Arial, Helvetica, sans-serif" font-size="18">Surface the local SSE endpoint, copy ready-to-use config, and keep office automation setup approachable.</text>
+
+  <rect x="72" y="184" width="596" height="280" rx="24" fill="#0D0D12" stroke="#27272A"/>
+  <text x="108" y="224" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">MCP CONFIG PANEL</text>
+  <rect x="108" y="248" width="524" height="86" rx="18" fill="#15151C" stroke="#27272A"/>
+  <text x="136" y="279" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">MCP 配置</text>
+  <text x="136" y="313" fill="#C084FC" font-family="Courier New, monospace" font-size="20">http://192.168.1.9:3000/sse</text>
+  <rect x="572" y="272" width="36" height="36" rx="10" fill="#18181B"/>
+  <path d="M586 282H594V298H578V290" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M590 278V286H598" stroke="#A1A1AA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="108" y="362" width="524" height="70" rx="18" fill="#18181B" stroke="#3F3F46"/>
+  <text x="136" y="392" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700">READY TO PASTE INTO CLAUDE, CURSOR, ZED</text>
+  <text x="136" y="418" fill="#E4E4E7" font-family="Arial, Helvetica, sans-serif" font-size="16">One-click config copy with optional API key headers.</text>
+
+  <rect x="748" y="184" width="620" height="280" rx="24" fill="#0D0D12" stroke="#27272A"/>
+  <text x="784" y="224" fill="#71717A" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="2">CLIENT CONFIG EXAMPLE</text>
+  <rect x="784" y="248" width="548" height="180" rx="18" fill="#15151C" stroke="#27272A"/>
+  <text x="816" y="286" fill="#10B981" font-family="Courier New, monospace" font-size="18">{</text>
+  <text x="840" y="316" fill="#10B981" font-family="Courier New, monospace" font-size="18">"mcpServers": {</text>
+  <text x="872" y="346" fill="#10B981" font-family="Courier New, monospace" font-size="18">"mcp-bridge": {</text>
+  <text x="904" y="376" fill="#10B981" font-family="Courier New, monospace" font-size="18">"url": "http://192.168.1.9:3000/sse"</text>
+  <text x="872" y="406" fill="#10B981" font-family="Courier New, monospace" font-size="18">}</text>
+  <text x="840" y="436" fill="#10B981" font-family="Courier New, monospace" font-size="18">}</text>
+  <text x="816" y="466" fill="#10B981" font-family="Courier New, monospace" font-size="18">}</text>
+</svg>
