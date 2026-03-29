@@ -1,10 +1,38 @@
-# MCP Bridge
+<p align="center">
+  <img src="./docs/assets/mcp-bridge-mark.svg" alt="MCP Bridge" width="120" height="120" />
+</p>
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
+<h1 align="center">MCP Bridge</h1>
 
-将内部 API 和 cURL 工作流转换为可供 AI Agent 调用的本地 MCP 工具。
+<p align="center"><strong>将内部 API 和 cURL 工作流转换为可供 AI Agent 调用的本地 MCP 工具。</strong></p>
 
-MCP Bridge 帮助团队把现有 HTTP 操作封装成 Claude Desktop、Cursor、Zed 等 MCP 客户端可直接调用的本地工具。它特别适合真实办公自动化场景: 用户往往已经有可用的 cURL 命令，现在只需要把它们变成更安全、可复用、对 Agent 更友好的工具。
+<p align="center">
+  MCP Bridge 帮助团队把已有 HTTP 操作封装成结构化、本地优先、对 Agent 更友好的 MCP 工具，方便 Claude Desktop、Cursor、Zed 等客户端直接调用。
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a> ·
+  <a href="./README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ainativeera/mcp-bridge/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/ainativeera/mcp-bridge/ci.yml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/ainativeera/mcp-bridge?style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/ainativeera/mcp-bridge?style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/issues"><img alt="Issues" src="https://img.shields.io/github/issues/ainativeera/mcp-bridge?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ainativeera/mcp-bridge">GitHub</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#mcp-客户端配置示例">MCP 配置</a> ·
+  <a href="./CONTRIBUTING.md">贡献指南</a> ·
+  <a href="./SECURITY.md">安全说明</a>
+</p>
+
+![MCP Bridge 总览](./docs/assets/overview-hero.svg)
+
+MCP Bridge 特别适合真实办公自动化场景: 用户往往已经有可用的 cURL 命令，现在只需要把它们变成更安全、可复用、对 Agent 更友好的工具。
 
 ## 为什么选择 MCP Bridge
 
@@ -31,10 +59,6 @@ MCP Bridge 帮助团队把现有 HTTP 操作封装成 Claude Desktop、Cursor、
 - 给 AI 助手提供结构化、可控的业务操作能力
 
 ## 截图
-
-### 产品总览
-
-![MCP Bridge 总览](./docs/assets/overview-hero.svg)
 
 ### cURL 转 MCP 工作流
 

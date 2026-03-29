@@ -1,10 +1,38 @@
-# MCP Bridge
+<p align="center">
+  <img src="./docs/assets/mcp-bridge-mark.svg" alt="MCP Bridge" width="120" height="120" />
+</p>
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
+<h1 align="center">MCP Bridge</h1>
 
-Turn internal APIs and cURL workflows into local MCP tools for AI agents.
+<p align="center"><strong>Turn internal APIs and cURL workflows into local MCP tools for AI agents.</strong></p>
 
-MCP Bridge helps teams convert existing HTTP operations into tools that Claude Desktop, Cursor, Zed, and other MCP clients can call through a local server. The project is designed for real-world office automation scenarios where users already have working cURL commands and want to make them safe, reusable, and agent-friendly.
+<p align="center">
+  MCP Bridge helps teams convert existing HTTP operations into structured, local-first MCP tools that Claude Desktop, Cursor, Zed, and other MCP clients can safely call.
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a> ·
+  <a href="./README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ainativeera/mcp-bridge/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/ainativeera/mcp-bridge/ci.yml?branch=main&label=CI&style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/ainativeera/mcp-bridge?style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/ainativeera/mcp-bridge?style=flat-square"></a>
+  <a href="https://github.com/ainativeera/mcp-bridge/issues"><img alt="Issues" src="https://img.shields.io/github/issues/ainativeera/mcp-bridge?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ainativeera/mcp-bridge">GitHub</a> ·
+  <a href="#getting-started">Getting Started</a> ·
+  <a href="#suggested-mcp-client-config">MCP Config</a> ·
+  <a href="./CONTRIBUTING.md">Contributing</a> ·
+  <a href="./SECURITY.md">Security</a>
+</p>
+
+![MCP Bridge overview](./docs/assets/overview-hero.svg)
+
+MCP Bridge is designed for real-world office automation scenarios where teams already have working cURL commands and want to convert them into safer, reusable, and agent-friendly tools without rebuilding integrations from scratch.
 
 ## Why MCP Bridge
 
@@ -31,10 +59,6 @@ MCP Bridge helps teams convert existing HTTP operations into tools that Claude D
 - Give AI assistants safe, structured access to business operations
 
 ## Screenshots
-
-### Product overview
-
-![MCP Bridge overview](./docs/assets/overview-hero.svg)
 
 ### cURL to MCP workflow
 
