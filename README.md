@@ -1,63 +1,183 @@
-# MCP Bridge - 开发者指南 (macOS)
+# MCP Bridge
 
-这是一个基于 Electron + React + Node.js 构建的 MCP (Model Context Protocol) 协议网关。
+Turn internal APIs and cURL workflows into local MCP tools for AI agents.
 
-## 🚀 快速开始
+MCP Bridge helps teams convert existing HTTP operations into tools that Claude Desktop, Cursor, Zed, and other MCP clients can call through a local server. The project is designed for real-world office automation scenarios where users already have working cURL commands and want to make them safe, reusable, and agent-friendly.
 
-### 1. 环境准备
-确保你的 Mac 已安装：
-- **Node.js** (建议 v18 或更高版本)
-- **npm** (随 Node.js 一起安装)
+## Why MCP Bridge
 
-### 2. 安装依赖
-在项目根目录下运行：
+- Import existing cURL commands instead of rebuilding integrations from scratch
+- Define MCP-friendly parameter schemas and response descriptions
+- Run a local MCP SSE server for desktop AI clients
+- Test, debug, and iterate on tools before exposing them to agents
+- Package the experience as a desktop app for non-technical users
+
+## Core Capabilities
+
+- cURL import: parse common request shapes into editable MCP tools
+- Tool editor: configure method, URL, headers, body, parameters, and output fields
+- Response shaping: extract the useful parts of large JSON responses
+- Local persistence: store tools and logs in SQLite
+- MCP transport: expose tools through a local SSE endpoint
+- Desktop packaging: ship as an Electron app for macOS and Windows
+
+## Use Cases
+
+- Turn internal approval or CRM APIs into agent-callable tools
+- Wrap repetitive office workflows behind stable MCP actions
+- Prototype agent integrations against existing APIs quickly
+- Give AI assistants safe, structured access to business operations
+
+## Screenshots
+
+Add screenshots or a short demo GIF here once the UI is stable. A strong open source landing page benefits a lot from a quick visual preview.
+
+## Architecture
+
+```text
+React UI
+  -> Electron desktop shell
+  -> Local Express server
+  -> SQLite storage
+  -> MCP SSE endpoint
+  -> External APIs imported from cURL definitions
+```
+
+Key entry points:
+
+- `src/App.tsx`: main application UI
+- `server.ts`: local Express server and MCP SSE implementation
+- `electron-main.ts`: Electron main process and desktop bridge
+- `src/db.ts`: SQLite persistence layer
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20 or newer
+- npm 10 or newer recommended
+- macOS for mac desktop packaging
+- Windows for native Windows validation, or macOS with Electron Builder cross-packaging support
+
+### Install
+
 ```bash
 npm install
 ```
 
-### 3. 启动开发模式
-你需要同时运行两个服务（或者在一个终端运行，应用会自动处理）：
+### Run The Web App
 
-**方式 A：全功能开发模式 (推荐)**
-1. 启动后端服务与 Vite 编译：
-   ```bash
-   npm run dev
-   ```
-2. 在另一个终端窗口启动 Electron 窗口：
-   ```bash
-   npm run electron:dev
-   ```
-
-**方式 B：仅 Web 预览模式**
-如果你只想在浏览器中调试 UI：
 ```bash
 npm run dev
 ```
-然后在浏览器访问 `http://localhost:3000`。
 
----
+Open:
 
-## 📦 打包发布 (生成 .dmg)
+```text
+http://localhost:3000
+```
 
-如果你想生成一个可以发给别人安装的 `.dmg` 文件：
+### Run The Desktop App In Development
+
+```bash
+npm run electron:dev
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+### Create Desktop Packages
 
 ```bash
 npm run dist:mac
+npm run dist:win
 ```
-打包完成后，安装包将出现在 `release/` 目录下。
 
----
+### Quality Checks
 
-## 🛠️ 核心功能说明
+```bash
+npm run check
+```
 
-- **cURL 导入**：点击左侧"导入 cURL"按钮，粘贴命令即可。
-- **SQLite 存储**：所有配置保存在本地 `mcp_bridge.db` 文件中。
-- **MCP SSE 协议**：应用运行后，SSE 地址为 `http://localhost:3000/sse`。
-- **返回值说明**：在"返回值说明"标签页中，可以为每个返回字段添加描述，帮助 AI 模型理解响应结构。
-- **智能识别返回字段**：运行测试成功后，点击"智能识别返回字段"按钮，系统会自动解析返回数据结构并填充字段信息。
+## Environment Variables
 
-## 📂 目录结构
-- `electron-main.ts`: Electron 主进程逻辑。
-- `server.ts`: Express 后端与 MCP SSE 协议实现。
-- `src/App.tsx`: React 前端界面。
-- `src/db.ts`: SQLite 数据库服务。
+Copy `.env.example` to `.env` and adjust as needed.
+
+Important values:
+
+- `PORT`: local HTTP and SSE port
+- `NODE_ENV`: development or production
+- `DB_PATH`: SQLite database location
+- `API_KEY`: optional API key for protecting local MCP access
+- `RATE_LIMIT_WINDOW_MS`: API rate limiting window
+- `RATE_LIMIT_MAX_REQUESTS`: max requests allowed in the window
+- `CORS_ORIGINS`: comma-separated origins
+- `LOG_LEVEL`: logger verbosity
+
+## MCP Endpoint
+
+When the server is running locally, the SSE endpoint is:
+
+```text
+http://localhost:3000/sse
+```
+
+In the packaged desktop app, the UI surfaces the detected local network address to make client setup easier across devices on the same LAN.
+
+## Suggested MCP Client Config
+
+```json
+{
+  "mcpServers": {
+    "mcp-bridge": {
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+
+If you enable an API key:
+
+```json
+{
+  "mcpServers": {
+    "mcp-bridge": {
+      "url": "http://localhost:3000/sse",
+      "headers": {
+        "X-API-Key": "your-secret-api-key"
+      }
+    }
+  }
+}
+```
+
+## Roadmap
+
+- Safer write-action confirmation for high-risk tools
+- Better auth templates for API keys, cookies, and OAuth-style flows
+- More robust cURL parsing coverage
+- Tool publishing workflow with validation and risk levels
+- Richer audit logs, replay, and observability
+- Reusable connector templates for office SaaS products
+
+## Contributing
+
+Contributions are welcome. Start here:
+
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Review [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- Check [SECURITY.md](./SECURITY.md) for sensitive reports
+
+## Community Standards
+
+- Be respectful and constructive
+- Prefer small, focused pull requests
+- Include reproduction steps for bugs
+- Keep office automation and agent safety in mind when proposing features
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE).

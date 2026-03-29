@@ -1,9 +1,33 @@
 {
   "name": "mcp-bridge",
-  "private": true,
+  "private": false,
   "version": "1.0.0",
   "description": "将任意 curl 请求转换成智能体可调用的 MCP 服务接口",
   "author": "MCP Bridge Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ainativeera/mcp-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ainativeera/mcp-bridge/issues"
+  },
+  "homepage": "https://github.com/ainativeera/mcp-bridge#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agent",
+    "curl",
+    "electron",
+    "react",
+    "automation",
+    "api-proxy",
+    "developer-tools",
+    "productivity"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "dist-electron/electron-main.js",
   "scripts": {
@@ -18,7 +42,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
