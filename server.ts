@@ -278,9 +278,15 @@ async function startServer() {
 
           try {
             const result = await executeToolInternal(tool, args || {});
-            sendJsonRpcResponse(session, message.id, {
+            const responsePayload: Record<string, any> = {
               content: [{ type: "text", text: JSON.stringify(result.response.filteredData) }]
-            });
+            };
+
+            if (result.response.structuredData !== undefined) {
+              responsePayload.structuredContent = result.response.structuredData;
+            }
+
+            sendJsonRpcResponse(session, message.id, responsePayload);
           } catch (error: any) {
             sendJsonRpcError(session, message.id, -32000, error.message);
           }
@@ -307,13 +313,57 @@ async function startServer() {
     res.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } })}\n\n`);
   }
 
+  function getValueByPath(source: any, path?: string) {
+    if (!path) {
+      return source;
+    }
+
+    const pathParts = path.split(".").filter((p: string) => p);
+    let currentValue = source;
+
+    for (const part of pathParts) {
+      if (currentValue && currentValue[part] !== undefined) {
+        currentValue = currentValue[part];
+      } else {
+        return undefined;
+      }
+    }
+
+    return currentValue;
+  }
+
+  function buildStructuredContent(tool: any, responseData: any, filteredData: any) {
+    if (!Array.isArray(tool.responseFields) || tool.responseFields.length === 0) {
+      if (filteredData && typeof filteredData === "object" && !Array.isArray(filteredData)) {
+        return filteredData;
+      }
+
+      return undefined;
+    }
+
+    const structuredContent: Record<string, any> = {};
+
+    tool.responseFields.forEach((field: any) => {
+      if (!field?.name) {
+        return;
+      }
+
+      const valueFromFiltered = getValueByPath(filteredData, field.path);
+      const value = valueFromFiltered !== undefined
+        ? valueFromFiltered
+        : getValueByPath(responseData, field.path);
+
+      structuredContent[field.name] = value;
+    });
+
+    return structuredContent;
+  }
+
   async function executeToolInternal(tool: any, values: any) {
     let finalUrl = tool.url;
     let finalBody = tool.body;
     let logError: string | undefined;
     let responseStatus: number | undefined;
-    let responseData: any;
-
     try {
       Object.entries(values).forEach(([key, value]) => {
         const placeholder = `{{${key}}}`;
@@ -357,19 +407,16 @@ async function startServer() {
         }
       }
 
-      responseData = data;
       let filteredData = data;
 
       if (tool.responseFilter) {
-        const pathParts = tool.responseFilter.split(".").filter((p: string) => p);
-        for (const part of pathParts) {
-          if (filteredData && filteredData[part] !== undefined) {
-            filteredData = filteredData[part];
-          } else {
-            break;
-          }
+        const extractedData = getValueByPath(filteredData, tool.responseFilter);
+        if (extractedData !== undefined) {
+          filteredData = extractedData;
         }
       }
+
+      const structuredData = buildStructuredContent(tool, data, filteredData);
 
       const logId = uuidv4Lib();
       toolService.saveLog({
@@ -382,7 +429,7 @@ async function startServer() {
         responseBody: data
       });
 
-      return { response: { status: responseStatus, filteredData } };
+      return { response: { status: responseStatus, filteredData, structuredData } };
     } catch (error: any) {
       logError = error.message;
       const logId = uuidv4Lib();
