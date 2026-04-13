@@ -2,6 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { toolService } from "./src/db";
+import { buildMcpToolDefinition } from "./src/lib/mcp-description";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import pino from "pino";
@@ -194,45 +195,17 @@ async function startServer() {
             
             const mapStartTime = Date.now();
             cachedMcpTools = tools.map((t: any) => {
-              const inputProperties: any = {};
-              (t.parameters || []).forEach((p: any) => {
-                inputProperties[p.name] = { type: p.type, description: p.description };
+              const toolDefinition = buildMcpToolDefinition({
+                name: t.name,
+                description: t.description || '',
+                parameters: t.parameters || [],
+                responseFields: t.responseFields || []
               });
-              
-              const outputProperties: any = {};
-              const requiredOutputs: string[] = [];
-              (t.responseFields || []).forEach((f: any) => {
-                if (f.name) {
-                  outputProperties[f.name] = { 
-                    type: f.type, 
-                    description: f.description,
-                    path: f.path,
-                    example: f.example
-                  };
-                  if (f.description) {
-                    requiredOutputs.push(f.name);
-                  }
-                }
-              });
-
-              const description = t.description || '';
-              const outputDesc = (t.responseFields || []).length > 0 
-                ? `${description}\n\n**返回字段说明:**\n${(t.responseFields || []).map((f: any) => `- \`${f.name}\` (${f.type}${f.path ? ', 路径: ' + f.path : ''}): ${f.description || '无说明'}${f.example ? ', 示例: ' + f.example : ''}`).join('\n')}`
-                : description;
 
               return {
-                name: t.name,
-                description: outputDesc,
-                inputSchema: {
-                  type: "object",
-                  properties: inputProperties,
-                  required: (t.parameters || []).filter((p: any) => p.required).map((p: any) => p.name)
-                },
-                outputSchema: Object.keys(outputProperties).length > 0 ? {
-                  type: "object",
-                  properties: outputProperties,
-                  required: requiredOutputs
-                } : undefined
+                name: toolDefinition.name,
+                description: toolDefinition.description,
+                inputSchema: toolDefinition.inputSchema
               };
             });
             const mapTime = Date.now() - mapStartTime;
@@ -313,20 +286,47 @@ async function startServer() {
     res.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } })}\n\n`);
   }
 
+  function isTreeResponseField(field: any) {
+    return Array.isArray(field?.children) || field?.name === "root";
+  }
+
+  function normalizePathParts(path?: string) {
+    if (!path || path === "$" || path === "$.") {
+      return [];
+    }
+
+    return path
+      .replace(/^\$\./, "")
+      .replace(/^\$/, "")
+      .replace(/\[(\d+)\]/g, ".$1")
+      .split(".")
+      .map((part: string) => part.trim())
+      .filter((part: string) => part.length > 0);
+  }
+
   function getValueByPath(source: any, path?: string) {
-    if (!path) {
+    if (!path || path === "$" || path === "$.") {
       return source;
     }
 
-    const pathParts = path.split(".").filter((p: string) => p);
+    const pathParts = normalizePathParts(path);
     let currentValue = source;
 
     for (const part of pathParts) {
-      if (currentValue && currentValue[part] !== undefined) {
-        currentValue = currentValue[part];
-      } else {
+      if (currentValue === null || currentValue === undefined) {
         return undefined;
       }
+
+      const isIndex = /^\d+$/.test(part);
+      const nextValue = isIndex && Array.isArray(currentValue)
+        ? currentValue[Number(part)]
+        : currentValue[part];
+
+      if (nextValue === undefined) {
+        return undefined;
+      }
+
+      currentValue = nextValue;
     }
 
     return currentValue;
@@ -339,6 +339,21 @@ async function startServer() {
       }
 
       return undefined;
+    }
+
+    if (isTreeResponseField(tool.responseFields[0])) {
+      const rootField = tool.responseFields[0];
+      const rootPath = rootField?.path || "$";
+      const valueFromFiltered = getValueByPath(filteredData, rootPath);
+      const value = valueFromFiltered !== undefined
+        ? valueFromFiltered
+        : getValueByPath(responseData, rootPath);
+
+      if (rootField?.name === "root") {
+        return value;
+      }
+
+      return { [rootField.name]: value };
     }
 
     const structuredContent: Record<string, any> = {};

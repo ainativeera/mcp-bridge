@@ -29,6 +29,41 @@ function getMcpUrl() {
   return `http://${host}:${defaultServerPort}/sse`;
 }
 
+function getValueByPath(source: any, path?: string) {
+  if (!path || path === '$' || path === '$.') {
+    return source;
+  }
+
+  const pathParts = path
+    .replace(/^\$\./, '')
+    .replace(/^\$/, '')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  let currentValue = source;
+
+  for (const part of pathParts) {
+    if (currentValue === null || currentValue === undefined) {
+      return undefined;
+    }
+
+    const isIndex = /^\d+$/.test(part);
+    const nextValue = isIndex && Array.isArray(currentValue)
+      ? currentValue[Number(part)]
+      : currentValue[part];
+
+    if (nextValue === undefined) {
+      return undefined;
+    }
+
+    currentValue = nextValue;
+  }
+
+  return currentValue;
+}
+
 function writeLog(message: string, payload?: unknown) {
   const detail = payload ? ` ${util.inspect(payload, { depth: 4 })}` : '';
   const line = `[${new Date().toISOString()}] ${message}${detail}`;
@@ -263,12 +298,10 @@ function registerIpcHandlers() {
 
       let filteredData = data;
       if (tool.responseFilter) {
-        const parts = tool.responseFilter.split('.');
-        parts.forEach(part => {
-          if (filteredData && filteredData[part] !== undefined) {
-            filteredData = filteredData[part];
-          }
-        });
+        const extractedData = getValueByPath(filteredData, tool.responseFilter);
+        if (extractedData !== undefined) {
+          filteredData = extractedData;
+        }
       }
 
       return {

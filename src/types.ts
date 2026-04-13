@@ -21,11 +21,14 @@ export interface MCPParameter {
 }
 
 export interface MCPResponseField {
+  id?: string;
   name: string;
   path: string;
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
+  required?: boolean;
   example?: string;
+  children?: MCPResponseField[];
 }
 
 export interface ExecutionLog {

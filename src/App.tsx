@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
+import { buildMcpToolDefinition, getResponseFieldSummary } from './lib/mcp-description';
 import { MCPTool, MCPParameter, MCPResponseField } from './types';
 
 // --- Types & Interfaces ---
@@ -202,77 +203,377 @@ const MethodBadge = ({ method }: { method: string }) => {
   return <span className={cn("font-mono font-bold text-[10px] w-10 inline-block", colors[method] || 'text-zinc-400')}>{method}</span>;
 };
 
-function parseResponseToFields(data: any, prefix = ''): MCPResponseField[] {
-  const fields: MCPResponseField[] = [];
-  
-  if (data === null || data === undefined) {
-    return fields;
-  }
-  
-  if (Array.isArray(data)) {
-    if (data.length > 0) {
-      fields.push({
-        name: prefix ? prefix.replace(/\.\d+$/, '_list') : 'items',
-        path: prefix || '$.',
-        type: 'array',
-        description: `数组，包含 ${data.length} 个元素`,
-        example: JSON.stringify(data.slice(0, 2))
-      });
-      const firstItem = data[0];
-      if (typeof firstItem === 'object' && firstItem !== null) {
-        const itemFields = parseResponseToFields(firstItem, prefix ? `${prefix}[0]` : '[0]');
-        fields.push(...itemFields);
-      }
+function createFieldId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function createResponseField(overrides: Partial<MCPResponseField> = {}): MCPResponseField {
+  return {
+    id: createFieldId(),
+    name: '',
+    path: '',
+    type: 'string',
+    description: '',
+    required: false,
+    example: '',
+    children: [],
+    ...overrides
+  };
+}
+
+function inferResponseFieldType(value: any): MCPResponseField['type'] {
+  if (Array.isArray(value)) return 'array';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (value && typeof value === 'object') return 'object';
+  return 'string';
+}
+
+function formatExample(value: any) {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return value.length > 50 ? `${value.substring(0, 50)}...` : value;
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value).slice(0, 80);
+    } catch {
+      return '';
     }
-    return fields;
   }
-  
-  if (typeof data === 'object') {
-    Object.entries(data).forEach(([key, value]) => {
-      const currentPath = prefix ? `${prefix}.${key}` : key;
-      const fieldName = prefix ? `${prefix}_${key}` : key;
-      
-      if (value === null || value === undefined) {
-        fields.push({
-          name: fieldName,
-          path: currentPath,
-          type: 'string',
-          description: '',
-          example: 'null'
-        });
-      } else if (typeof value === 'string') {
-        fields.push({
-          name: fieldName,
-          path: currentPath,
-          type: 'string',
-          description: '',
-          example: value.length > 50 ? value.substring(0, 50) + '...' : value
-        });
-      } else if (typeof value === 'number') {
-        fields.push({
-          name: fieldName,
-          path: currentPath,
-          type: 'number',
-          description: '',
-          example: String(value)
-        });
-      } else if (typeof value === 'boolean') {
-        fields.push({
-          name: fieldName,
-          path: currentPath,
-          type: 'boolean',
-          description: '',
-          example: String(value)
-        });
-      } else if (Array.isArray(value)) {
-        fields.push(...parseResponseToFields(value, currentPath));
-      } else if (typeof value === 'object') {
-        fields.push(...parseResponseToFields(value, currentPath));
-      }
+  return String(value);
+}
+
+function normalizePath(path?: string) {
+  if (!path || path === '$' || path === '$.') return '$';
+  return path
+    .replace(/^\$\./, '')
+    .replace(/^\$/, '')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function buildPath(parentPath: string, fieldName: string, parentType?: MCPResponseField['type']) {
+  if (parentType === 'array') {
+    return `${parentPath}[0]${fieldName ? `.${fieldName}` : ''}`;
+  }
+  if (parentPath === '$') {
+    return fieldName || '$';
+  }
+  return fieldName ? `${parentPath}.${fieldName}` : parentPath;
+}
+
+function parseResponseToFieldTree(data: any, name = 'root', path = '$'): MCPResponseField {
+  const type = inferResponseFieldType(data);
+
+  if (type === 'array') {
+    const firstItem = Array.isArray(data) && data.length > 0 ? data[0] : null;
+    const itemNode = createResponseField({
+      name: 'item',
+      path: `${path}[0]`,
+      type: inferResponseFieldType(firstItem),
+      description: '',
+      example: formatExample(firstItem)
+    });
+
+    if (firstItem && typeof firstItem === 'object') {
+      itemNode.children = Array.isArray(firstItem)
+        ? [parseResponseToFieldTree(firstItem[0], 'item', `${path}[0][0]`)]
+        : Object.entries(firstItem).map(([key, value]) => parseResponseToFieldTree(value, key, `${path}[0].${key}`));
+    }
+
+    return createResponseField({
+      name,
+      path,
+      type: 'array',
+      description: '',
+      example: formatExample(Array.isArray(data) ? data.slice(0, 2) : data),
+      children: [itemNode]
     });
   }
-  
-  return fields;
+
+  if (type === 'object') {
+    return createResponseField({
+      name,
+      path,
+      type: 'object',
+      description: '',
+      example: '',
+      children: Object.entries(data || {}).map(([key, value]) => parseResponseToFieldTree(value, key, path === '$' ? key : `${path}.${key}`))
+    });
+  }
+
+  return createResponseField({
+    name,
+    path,
+    type,
+    description: '',
+    example: formatExample(data),
+    children: []
+  });
+}
+
+function walkResponseFields(fields: MCPResponseField[], visit: (field: MCPResponseField, parent?: MCPResponseField) => void, parent?: MCPResponseField) {
+  fields.forEach((field) => {
+    visit(field, parent);
+    if (field.children?.length) {
+      walkResponseFields(field.children, visit, field);
+    }
+  });
+}
+
+function ensureResponseFieldIds(fields: MCPResponseField[]): MCPResponseField[] {
+  return fields.map((field) => ({
+    ...field,
+    id: field.id || createFieldId(),
+    required: field.required ?? false,
+    children: ensureResponseFieldIds(field.children || [])
+  }));
+}
+
+function legacyFieldsToTree(fields: MCPResponseField[]): MCPResponseField[] {
+  const root = createResponseField({
+    name: 'root',
+    path: '$',
+    type: 'object',
+    children: []
+  });
+
+  const getOrCreateChild = (parent: MCPResponseField, childName: string, childPath: string, childType: MCPResponseField['type']) => {
+    const existing = (parent.children || []).find((child) => child.name === childName && child.path === childPath);
+    if (existing) {
+      if (existing.type !== 'array' && childType === 'array') {
+        existing.type = childType;
+      }
+      return existing;
+    }
+    const child = createResponseField({
+      name: childName,
+      path: childPath,
+      type: childType,
+      children: childType === 'object' || childType === 'array' ? [] : []
+    });
+    parent.children = [...(parent.children || []), child];
+    return child;
+  };
+
+  fields.forEach((field) => {
+    const segments = normalizePath(field.path || field.name);
+    if (segments === '$') {
+      return;
+    }
+
+    const parts = Array.isArray(segments) ? segments : [];
+    let current = root;
+    let currentPath = '$';
+
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1;
+      const isIndex = /^\d+$/.test(part);
+
+      if (isIndex) {
+        current.type = 'array';
+        const itemPath = `${currentPath}[0]`;
+        current = getOrCreateChild(current, 'item', itemPath, isLast ? field.type : 'object');
+        currentPath = itemPath;
+        return;
+      }
+
+      const nextPart = parts[index + 1];
+      const nextType: MCPResponseField['type'] = isLast
+        ? field.type
+        : /^\d+$/.test(nextPart || '') ? 'array' : 'object';
+      const nextPath = currentPath === '$' ? part : `${currentPath}.${part}`;
+      current = getOrCreateChild(current, part, nextPath, nextType);
+      currentPath = nextPath;
+
+      if (isLast) {
+        current.description = field.description;
+        current.example = field.example;
+        current.required = field.required ?? false;
+      }
+    });
+  });
+
+  return [root];
+}
+
+function normalizeResponseFields(fields: MCPResponseField[]) {
+  const withIds = ensureResponseFieldIds(fields || []);
+  const hasTreeShape = withIds.some((field) => (field.children?.length || field.name === 'root'));
+  return hasTreeShape ? withIds : legacyFieldsToTree(withIds);
+}
+
+function updateResponseFieldTree(fields: MCPResponseField[], fieldId: string, updater: (field: MCPResponseField) => MCPResponseField): MCPResponseField[] {
+  return fields.map((field) => {
+    if (field.id === fieldId) {
+      return updater(field);
+    }
+    if (field.children?.length) {
+      return {
+        ...field,
+        children: updateResponseFieldTree(field.children, fieldId, updater)
+      };
+    }
+    return field;
+  });
+}
+
+function removeResponseFieldTree(fields: MCPResponseField[], fieldId: string): MCPResponseField[] {
+  return fields
+    .filter((field) => field.id !== fieldId)
+    .map((field) => ({
+      ...field,
+      children: removeResponseFieldTree(field.children || [], fieldId)
+    }));
+}
+
+function rebuildResponseFieldPaths(field: MCPResponseField, parentPath = '$', parentType?: MCPResponseField['type']): MCPResponseField {
+  const isRoot = field.name === 'root' && parentPath === '$';
+  const nextPath = isRoot ? '$' : buildPath(parentPath, field.name, parentType);
+  const nextType = field.type;
+
+  return {
+    ...field,
+    path: nextPath,
+    children: (field.children || []).map((child) => rebuildResponseFieldPaths(child, nextPath, nextType))
+  };
+}
+
+interface ResponseFieldTreeEditorProps {
+  fields: MCPResponseField[];
+  expandedMap: Record<string, boolean>;
+  onToggle: (fieldId: string) => void;
+  onUpdate: (fieldId: string, updates: Partial<MCPResponseField>) => void;
+  onAddChild: (parentId?: string) => void;
+  onDelete: (fieldId: string) => void;
+}
+
+function ResponseFieldTreeEditor({
+  fields,
+  expandedMap,
+  onToggle,
+  onUpdate,
+  onAddChild,
+  onDelete
+}: ResponseFieldTreeEditorProps) {
+  const renderNode = (field: MCPResponseField, depth = 0, parent?: MCPResponseField) => {
+    const canExpand = !!field.children?.length;
+    const isExpanded = field.id ? expandedMap[field.id] !== false : true;
+    const isRoot = field.name === 'root' && depth === 0;
+    const canHaveChildren = field.type === 'object' || field.type === 'array';
+    const isArrayItemNode = parent?.type === 'array' && field.name === 'item';
+    const isReadonlyName = isRoot || isArrayItemNode;
+
+    return (
+      <div key={field.id || field.path} className="space-y-1.5">
+        <div
+          className="grid grid-cols-[minmax(0,2.2fr)_88px_0.9fr_1.1fr_64px] items-center gap-2 rounded-lg bg-transparent px-1 py-0.5"
+          style={{ marginLeft: depth * 12 }}
+        >
+          <div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => canExpand && field.id && onToggle(field.id)}
+                className={cn(
+                  "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-zinc-600",
+                  canExpand ? "hover:bg-zinc-900 hover:text-zinc-300" : "opacity-30"
+                )}
+              >
+                {canExpand ? (isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />) : <div className="h-3 w-3" />}
+              </button>
+              <input
+                type="text"
+                value={isRoot ? 'root' : field.name}
+                onChange={(e) => !isReadonlyName && field.id && onUpdate(field.id, { name: e.target.value })}
+                disabled={isReadonlyName}
+                placeholder={parent?.type === 'array' ? 'item' : '字段名'}
+                className={cn(
+                  "w-full rounded-md border border-zinc-800/70 bg-zinc-900/70 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-500",
+                  isReadonlyName ? "cursor-not-allowed text-zinc-500" : "text-zinc-100"
+                )}
+              />
+            </div>
+          </div>
+
+          <div>
+            <select
+              value={field.type}
+              onChange={(e) => field.id && onUpdate(field.id, { type: e.target.value as MCPResponseField['type'] })}
+              className="w-full rounded-md border border-zinc-800/70 bg-zinc-900/70 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="object">object</option>
+              <option value="array">array</option>
+              <option value="string">string</option>
+              <option value="number">number</option>
+              <option value="boolean">boolean</option>
+            </select>
+          </div>
+
+          <input
+            type="text"
+            value={field.example || ''}
+            onChange={(e) => field.id && onUpdate(field.id, { example: e.target.value })}
+            placeholder="mock / 示例值"
+            className="w-full rounded-md border border-zinc-800/70 bg-zinc-900/70 px-2 py-1 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
+          />
+
+          <input
+            type="text"
+            value={field.description}
+            onChange={(e) => field.id && onUpdate(field.id, { description: e.target.value })}
+            placeholder="字段说明"
+            className="w-full rounded-md border border-zinc-800/70 bg-zinc-900/70 px-2 py-1 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
+          />
+
+          <div className="flex items-center justify-end gap-1">
+            {canHaveChildren && field.id && (
+              <button
+                type="button"
+                onClick={() => onAddChild(field.id)}
+                className="rounded-md p-1 text-emerald-400 transition-colors hover:bg-emerald-500/10"
+                title="添加子字段"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            )}
+            {!isRoot && field.id && (
+              <button
+                type="button"
+                onClick={() => onDelete(field.id)}
+                className="rounded-md p-1 text-rose-400 transition-colors hover:bg-rose-500/10"
+                title="删除字段"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {canExpand && isExpanded && (
+          <div className="space-y-1 border-l border-zinc-800/50 ml-1.5">
+            {field.children!.map((child) => renderNode(child, depth + 1, field))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[minmax(0,2.2fr)_88px_0.9fr_1.1fr_64px] gap-2 px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+        <div>字段名</div>
+        <div>类型</div>
+        <div>示例</div>
+        <div>说明</div>
+        <div className="text-right">操作</div>
+      </div>
+      <div className="space-y-1.5">
+        {fields.map((field) => renderNode(field))}
+      </div>
+    </div>
+  );
 }
 
 // --- Main App ---
@@ -303,6 +604,7 @@ function AppContent() {
     }
   });
   const [tools, setTools] = useState<MCPTool[]>([]);
+  const [savedTools, setSavedTools] = useState<MCPTool[]>([]);
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -323,11 +625,13 @@ function AppContent() {
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [serverStatus, setServerStatus] = useState({ activeConnections: 0, uptime: 0, toolsCount: 0 });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [globalSettings, setGlobalSettings] = useState<{ globalHeaders: { key: string; value: string }[]; proxyUrl: string; apiKey: string }>({
     globalHeaders: [],
     proxyUrl: '',
     apiKey: ''
   });
+  const [expandedResponseFields, setExpandedResponseFields] = useState<Record<string, boolean>>({});
 
   const [copySuccess, setCopySuccess] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -402,10 +706,14 @@ function AppContent() {
 
   const fetchTools = async () => {
     try {
-      const data = await api.getTools();
-      setTools(data);
-      if (data.length > 0 && !activeToolId) {
-        setActiveToolId(data[0].id);
+      const normalizedTools = (await api.getTools()).map((tool: MCPTool) => ({
+        ...tool,
+        responseFields: normalizeResponseFields(tool.responseFields || [])
+      }));
+      setTools(normalizedTools);
+      setSavedTools(normalizedTools);
+      if (normalizedTools.length > 0 && !activeToolId) {
+        setActiveToolId(normalizedTools[0].id);
       }
     } catch (err) {
       console.error('Failed to fetch tools', err);
@@ -434,6 +742,23 @@ function AppContent() {
   };
 
   const activeTool = useMemo(() => tools.find(t => t.id === activeToolId) || null, [tools, activeToolId]);
+  const savedActiveTool = useMemo(() => savedTools.find(t => t.id === activeToolId) || null, [savedTools, activeToolId]);
+  const mcpToolPreview = useMemo(() => {
+    if (!savedActiveTool) return null;
+    return buildMcpToolDefinition(savedActiveTool);
+  }, [savedActiveTool]);
+
+  useEffect(() => {
+    if (!activeTool?.responseFields?.length) return;
+
+    const nextExpanded: Record<string, boolean> = {};
+    walkResponseFields(activeTool.responseFields, (field) => {
+      if (field.id && field.children?.length) {
+        nextExpanded[field.id] = true;
+      }
+    });
+    setExpandedResponseFields(nextExpanded);
+  }, [activeToolId]);
 
   const handleCreateTool = () => {
     const newTool: MCPTool = {
@@ -446,16 +771,80 @@ function AppContent() {
       body: '{}',
       responseFilter: '',
       parameters: [],
-      responseFields: [],
+      responseFields: [createResponseField({ name: 'root', path: '$', type: 'object', children: [] })],
       createdAt: Date.now()
     };
     setTools([newTool, ...tools]);
+    setSavedTools(prev => prev.filter(t => t.id !== newTool.id));
     setActiveToolId(newTool.id);
   };
 
   const handleUpdateTool = (updates: Partial<MCPTool>) => {
     if (!activeToolId) return;
-    setTools(tools.map(t => t.id === activeToolId ? { ...t, ...updates } : t));
+    setTools(tools.map(t => t.id === activeToolId ? {
+      ...t,
+      ...updates,
+      responseFields: updates.responseFields ? normalizeResponseFields(updates.responseFields) : t.responseFields
+    } : t));
+  };
+
+  const updateResponseField = (fieldId: string, updates: Partial<MCPResponseField>) => {
+    if (!activeTool) return;
+
+    const nextFields = updateResponseFieldTree(activeTool.responseFields, fieldId, (field) => {
+      const nextField = { ...field, ...updates };
+      if (nextField.type !== 'object' && nextField.type !== 'array') {
+        nextField.children = [];
+      } else {
+        nextField.children = nextField.children || [];
+      }
+      return nextField;
+    }).map((field) => rebuildResponseFieldPaths(field));
+
+    handleUpdateTool({ responseFields: nextFields });
+  };
+
+  const addResponseChildField = (parentId?: string) => {
+    if (!activeTool) return;
+
+    const nextFields = (parentId
+      ? updateResponseFieldTree(activeTool.responseFields, parentId, (field) => {
+          const childType: MCPResponseField['type'] = field.type === 'array' ? 'object' : 'string';
+          const child = createResponseField({
+            name: field.type === 'array' ? 'item' : '',
+            path: '',
+            type: childType,
+            children: childType === 'object' ? [] : []
+          });
+          return {
+            ...field,
+            children: [...(field.children || []), child]
+          };
+        })
+      : activeTool.responseFields.length > 0
+        ? updateResponseFieldTree(activeTool.responseFields, activeTool.responseFields[0].id!, (field) => ({
+            ...field,
+            children: [...(field.children || []), createResponseField({
+              name: '',
+              path: '',
+              type: 'string'
+            })]
+          }))
+        : [createResponseField({ name: 'root', path: '$', type: 'object', children: [] })])
+      .map((field) => rebuildResponseFieldPaths(field));
+
+    handleUpdateTool({ responseFields: nextFields });
+
+    const expandId = parentId || nextFields[0]?.id;
+    if (expandId) {
+      setExpandedResponseFields(prev => ({ ...prev, [expandId]: true }));
+    }
+  };
+
+  const deleteResponseField = (fieldId: string) => {
+    if (!activeTool) return;
+    const nextFields = removeResponseFieldTree(activeTool.responseFields, fieldId);
+    handleUpdateTool({ responseFields: (nextFields.length ? nextFields : [createResponseField({ name: 'root', path: '$', type: 'object', children: [] })]).map((field) => rebuildResponseFieldPaths(field)) });
   };
 
   const saveTool = async () => {
@@ -463,6 +852,9 @@ function AppContent() {
     setIsSaving(true);
     try {
       await api.saveTool(activeTool);
+      setSavedTools(prev => prev.some(t => t.id === activeTool.id)
+        ? prev.map(t => t.id === activeTool.id ? activeTool : t)
+        : [activeTool, ...prev]);
       setIsSaving(false);
       setShowSavedFeedback(true);
       setTimeout(() => {
@@ -480,6 +872,7 @@ function AppContent() {
       await api.deleteTool(id);
       const newTools = tools.filter(t => t.id !== id);
       setTools(newTools);
+      setSavedTools(prev => prev.filter(t => t.id !== id));
       if (activeToolId === id) {
         setActiveToolId(newTools[0]?.id || null);
       }
@@ -635,7 +1028,7 @@ function AppContent() {
         body,
         responseFilter: '',
         parameters,
-        responseFields: [],
+        responseFields: [createResponseField({ name: 'root', path: '$', type: 'object', children: [] })],
         createdAt: Date.now()
       };
 
@@ -797,7 +1190,7 @@ function AppContent() {
             <Zap className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-sm font-semibold tracking-tight">MCP Bridge</div>
+            <div className="text-sm font-semibold tracking-tight">MCP Bridge | MCP 桥接器</div>
             <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
               Desktop Workspace
             </div>
@@ -1068,13 +1461,24 @@ function AppContent() {
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Description Card */}
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AI 描述 (给大模型看的指令)</label>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">工具用途说明</label>
+                    <p className="text-xs text-zinc-500">给模型看的摘要。建议写清什么时候调用、关键参数代表什么、返回的核心结果是什么。</p>
+                  </div>
+                  <button
+                    onClick={() => setIsPreviewModalOpen(true)}
+                    className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-950 hover:text-zinc-100"
+                  >
+                    MCP 预览
+                  </button>
+                </div>
                 <textarea 
                   value={activeTool.description}
                   onChange={(e) => handleUpdateTool({ description: e.target.value })}
-                  placeholder="请用自然语言告诉大模型，什么时候该调用这个工具？它能做什么？"
-                  className="w-full bg-transparent border-none resize-none focus:ring-0 outline-none text-zinc-300 min-h-[60px]"
+                  placeholder="例如：根据订单号查询订单详情，适合在用户已经提供订单号后调用。返回订单状态、金额、收货信息等结构化数据。"
+                  className="w-full min-h-[108px] resize-none rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>
 
@@ -1202,63 +1606,77 @@ function AppContent() {
                   {activeTab === 'params' && (
                     <div className="space-y-4">
                       {activeTool.parameters.length > 0 ? (
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-zinc-500 text-left border-b border-zinc-800">
-                              <th className="pb-2 font-medium">参数名</th>
-                              <th className="pb-2 font-medium">类型</th>
-                              <th className="pb-2 font-medium">必填</th>
-                              <th className="pb-2 font-medium">参数说明 (给AI看的)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-800">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+                            <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">参数定义</label>
+                              <p className="mt-1 text-xs text-zinc-500">模型会根据这里的名称、类型、必填规则和说明来自动拼装参数。</p>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                              <Badge variant="default">{activeTool.parameters.length} 个参数</Badge>
+                              <Badge variant="warning">{activeTool.parameters.filter(param => param.required).length} 个必填</Badge>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
                             {activeTool.parameters.map((param, idx) => (
-                              <tr key={param.name}>
-                                <td className="py-3 font-mono text-purple-400">{param.name}</td>
-                                <td className="py-3">
-                                  <select 
-                                    value={param.type}
-                                    onChange={(e) => {
-                                      const newParams = [...activeTool.parameters];
-                                      newParams[idx].type = e.target.value as any;
-                                      handleUpdateTool({ parameters: newParams });
-                                    }}
-                                    className="bg-zinc-800 border-none rounded px-2 py-1 text-xs"
-                                  >
-                                    <option>string</option>
-                                    <option>number</option>
-                                    <option>boolean</option>
-                                  </select>
-                                </td>
-                                <td className="py-3">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={param.required}
-                                    onChange={(e) => {
-                                      const newParams = [...activeTool.parameters];
-                                      newParams[idx].required = e.target.checked;
-                                      handleUpdateTool({ parameters: newParams });
-                                    }}
-                                    className="rounded bg-zinc-800 border-zinc-700 text-purple-600 focus:ring-0"
-                                  />
-                                </td>
-                                <td className="py-3">
-                                  <input 
-                                    type="text" 
-                                    value={param.description}
-                                    onChange={(e) => {
-                                      const newParams = [...activeTool.parameters];
-                                      newParams[idx].description = e.target.value;
-                                      handleUpdateTool({ parameters: newParams });
-                                    }}
-                                    placeholder="例如: 需要查询的城市中文名"
-                                    className="w-full bg-transparent border-none focus:ring-0 outline-none text-zinc-400"
-                                  />
-                                </td>
-                              </tr>
+                              <div key={param.name} className="rounded-xl border border-zinc-800 bg-zinc-900/55 p-4">
+                                <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)_120px_100px] items-center">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-500">参数</span>
+                                    <span className="truncate font-mono text-sm text-purple-400">{param.name}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <label className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-500">参数说明</label>
+                                    <input 
+                                      type="text" 
+                                      value={param.description}
+                                      onChange={(e) => {
+                                        const newParams = [...activeTool.parameters];
+                                        newParams[idx].description = e.target.value;
+                                        handleUpdateTool({ parameters: newParams });
+                                      }}
+                                      placeholder="例如：订单唯一标识，只支持系统生成的 orderId"
+                                      className="w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center gap-3">
+                                    <label className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-zinc-500">类型</label>
+                                    <select 
+                                      value={param.type}
+                                      onChange={(e) => {
+                                        const newParams = [...activeTool.parameters];
+                                        newParams[idx].type = e.target.value as any;
+                                        handleUpdateTool({ parameters: newParams });
+                                      }}
+                                      className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
+                                    >
+                                      <option>string</option>
+                                      <option>number</option>
+                                      <option>boolean</option>
+                                    </select>
+                                  </div>
+
+                                  <label className="flex items-center justify-between gap-2 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">必填</span>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={param.required}
+                                      onChange={(e) => {
+                                        const newParams = [...activeTool.parameters];
+                                        newParams[idx].required = e.target.checked;
+                                        handleUpdateTool({ parameters: newParams });
+                                      }}
+                                      className="rounded bg-zinc-800 border-zinc-700 text-purple-600 focus:ring-0"
+                                    />
+                                  </label>
+                                </div>
+                              </div>
                             ))}
-                          </tbody>
-                        </table>
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-zinc-500 space-y-2">
                           <Terminal className="w-8 h-8 opacity-20" />
@@ -1379,13 +1797,9 @@ function AppContent() {
                         <div className="flex items-center justify-between">
                           <div>
                             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">返回值字段说明</label>
-                            <p className="text-xs text-zinc-500 mt-1">告诉大模型每个返回字段的含义，让它更好地理解和使用返回值</p>
                           </div>
                           <button 
-                            onClick={() => {
-                              const newFields = [...activeTool.responseFields, { name: '', path: '', type: 'string', description: '', example: '' }];
-                              handleUpdateTool({ responseFields: newFields });
-                            }}
+                            onClick={() => addResponseChildField()}
                             className="text-xs bg-purple-600/20 text-purple-400 px-3 py-1.5 rounded hover:bg-purple-600/40 transition-all flex items-center gap-1"
                           >
                             <Plus className="w-3 h-3" /> 添加字段
@@ -1393,104 +1807,14 @@ function AppContent() {
                         </div>
 
                         {activeTool.responseFields.length > 0 ? (
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-zinc-500 text-left border-b border-zinc-800">
-                                <th className="pb-2 font-medium">字段名</th>
-                                <th className="pb-2 font-medium">JSONPath</th>
-                                <th className="pb-2 font-medium">类型</th>
-                                <th className="pb-2 font-medium">说明</th>
-                                <th className="pb-2 font-medium">示例值</th>
-                                <th className="pb-2 w-10"></th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-800">
-                              {activeTool.responseFields.map((field, idx) => (
-                                <tr key={idx}>
-                                  <td className="py-2">
-                                    <input 
-                                      type="text" 
-                                      value={field.name}
-                                      onChange={(e) => {
-                                        const newFields = [...activeTool.responseFields];
-                                        newFields[idx].name = e.target.value;
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      placeholder="例如: userId"
-                                      className="w-full bg-transparent border-none focus:ring-0 outline-none text-purple-400 font-mono text-xs"
-                                    />
-                                  </td>
-                                  <td className="py-2">
-                                    <input 
-                                      type="text" 
-                                      value={field.path}
-                                      onChange={(e) => {
-                                        const newFields = [...activeTool.responseFields];
-                                        newFields[idx].path = e.target.value;
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      placeholder="例如: data.users.0.id"
-                                      className="w-full bg-transparent border-none focus:ring-0 outline-none text-zinc-400 font-mono text-xs"
-                                    />
-                                  </td>
-                                  <td className="py-2">
-                                    <select 
-                                      value={field.type}
-                                      onChange={(e) => {
-                                        const newFields = [...activeTool.responseFields];
-                                        newFields[idx].type = e.target.value as any;
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      className="bg-zinc-800 border-none rounded px-2 py-1 text-xs"
-                                    >
-                                      <option>string</option>
-                                      <option>number</option>
-                                      <option>boolean</option>
-                                      <option>array</option>
-                                      <option>object</option>
-                                    </select>
-                                  </td>
-                                  <td className="py-2">
-                                    <input 
-                                      type="text" 
-                                      value={field.description}
-                                      onChange={(e) => {
-                                        const newFields = [...activeTool.responseFields];
-                                        newFields[idx].description = e.target.value;
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      placeholder="这个字段代表什么"
-                                      className="w-full bg-transparent border-none focus:ring-0 outline-none text-zinc-300 text-xs"
-                                    />
-                                  </td>
-                                  <td className="py-2">
-                                    <input 
-                                      type="text" 
-                                      value={field.example || ''}
-                                      onChange={(e) => {
-                                        const newFields = [...activeTool.responseFields];
-                                        newFields[idx].example = e.target.value;
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      placeholder="示例值"
-                                      className="w-full bg-transparent border-none focus:ring-0 outline-none text-zinc-500 text-xs"
-                                    />
-                                  </td>
-                                  <td className="py-2">
-                                    <button 
-                                      onClick={() => {
-                                        const newFields = activeTool.responseFields.filter((_, i) => i !== idx);
-                                        handleUpdateTool({ responseFields: newFields });
-                                      }}
-                                      className="p-1 text-zinc-500 hover:text-rose-400"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <ResponseFieldTreeEditor
+                            fields={activeTool.responseFields}
+                            expandedMap={expandedResponseFields}
+                            onToggle={(fieldId) => setExpandedResponseFields(prev => ({ ...prev, [fieldId]: !prev[fieldId] }))}
+                            onUpdate={updateResponseField}
+                            onAddChild={addResponseChildField}
+                            onDelete={deleteResponseField}
+                          />
                         ) : (
                           <div className="flex flex-col items-center justify-center py-8 text-zinc-500 space-y-2">
                             <Sparkles className="w-8 h-8 opacity-20" />
@@ -1504,9 +1828,9 @@ function AppContent() {
                             <span className="text-xs font-medium">为什么要填写返回值说明？</span>
                           </div>
                           <ul className="text-[10px] text-zinc-500 space-y-1 ml-5">
-                            <li>• 大模型可以通过字段说明理解每个值的含义</li>
-                            <li>• 示例值帮助模型学习返回数据的格式</li>
-                            <li>• JSONPath 精确定位嵌套字段（如 data.items.0.name）</li>
+                            <li>• 大模型可以通过树形字段说明理解整个响应结构</li>
+                            <li>• `object` 和 `array` 节点可以继续展开子字段</li>
+                            <li>• 路径会在内部自动维护，界面上无需手写 `[0].name`</li>
                           </ul>
                         </div>
                       </div>
@@ -1604,6 +1928,67 @@ function AppContent() {
           </div>
         )}
       </main>
+
+      {/* MCP Preview Modal */}
+      <AnimatePresence>
+        {isPreviewModalOpen && activeTool && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPreviewModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+            >
+              <div className="p-6 space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-lg text-zinc-100">{activeTool.name}</span>
+                      <MethodBadge method={activeTool.method} />
+                    </div>
+                    <p className="text-sm text-zinc-500">这是当前工具发给 MCP client 的摘要预览。</p>
+                  </div>
+                  <button
+                    onClick={() => setIsPreviewModalOpen(false)}
+                    className="rounded-lg p-2 transition-colors hover:bg-zinc-800"
+                  >
+                    <XCircle className="w-5 h-5 text-zinc-500" />
+                  </button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">输入参数</div>
+                    <div className="mt-1 text-sm text-zinc-200">{activeTool.parameters.length}</div>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">必填参数</div>
+                    <div className="mt-1 text-sm text-zinc-200">{activeTool.parameters.filter(param => param.required).length}</div>
+                  </div>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">返回字段</div>
+                    <div className="mt-1 text-sm text-zinc-200">{getResponseFieldSummary(activeTool.responseFields || []).length}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">描述预览</div>
+                  <pre className="mt-3 whitespace-pre-wrap text-[12px] leading-6 text-zinc-300">
+                    {mcpToolPreview?.description || '这里会根据工具描述、参数说明和返回字段自动生成更清晰的 MCP 摘要。'}
+                  </pre>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* cURL Import Modal */}
       <AnimatePresence>
@@ -1953,8 +2338,8 @@ function AppContent() {
                     <button 
                       onClick={() => {
                         const filteredData = executionResult.response?.filteredData;
-                        const parsedFields = parseResponseToFields(filteredData);
-                        if (parsedFields.length > 0) {
+                        if (filteredData !== undefined) {
+                          const parsedFields = [parseResponseToFieldTree(filteredData)];
                           handleUpdateTool({ responseFields: parsedFields });
                           setActiveTab('output');
                         } else {
