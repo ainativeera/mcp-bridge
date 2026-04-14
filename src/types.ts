@@ -27,6 +27,7 @@ export interface MCPResponseField {
   type: 'string' | 'number' | 'boolean' | 'array' | 'object';
   description: string;
   required?: boolean;
+  includeInResponse?: boolean;
   example?: string;
   children?: MCPResponseField[];
 }

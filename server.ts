@@ -37,6 +37,18 @@ async function startServer() {
   const app = express();
   let db: any;
 
+  type SessionState = {
+    response: express.Response;
+    createdAt: number;
+    lastActivityAt: number;
+    lastMethod: string;
+    messageCount: number;
+    initialized: boolean;
+    userAgent?: string;
+    remoteAddress?: string;
+    lastError?: string;
+  };
+
   try {
     const Database = (await import("better-sqlite3")).default;
     db = new Database(config.dbPath);
@@ -85,17 +97,32 @@ async function startServer() {
     next();
   };
 
-  const sessions = new Map<string, express.Response>();
+  const sessions = new Map<string, SessionState>();
   let toolsVersion = 0;
   let cachedTools: any[] | null = null;
   let cachedMcpTools: any[] | null = null;
+
+  const getSessionSummaries = () =>
+    Array.from(sessions.entries())
+      .map(([sessionId, session]) => ({
+        sessionId,
+        createdAt: session.createdAt,
+        lastActivityAt: session.lastActivityAt,
+        lastMethod: session.lastMethod,
+        messageCount: session.messageCount,
+        initialized: session.initialized,
+        userAgent: session.userAgent,
+        remoteAddress: session.remoteAddress,
+        lastError: session.lastError
+      }))
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
 
   const broadcastToolsChange = () => {
     toolsVersion++;
     cachedTools = null;
     cachedMcpTools = null;
     sessions.forEach((session) => {
-      session.write(`event: message\ndata: ${JSON.stringify({
+      session.response.write(`event: message\ndata: ${JSON.stringify({
         jsonrpc: "2.0",
         method: "notifications/tools/list_changed",
         params: {}
@@ -117,7 +144,8 @@ async function startServer() {
       activeConnections: sessions.size,
       uptime: process.uptime(),
       toolsCount: toolService.getAll().length,
-      toolsVersion
+      toolsVersion,
+      sessions: getSessionSummaries().slice(0, 5)
     });
   });
 
@@ -139,12 +167,24 @@ async function startServer() {
       id: null,
       result: {
         protocolVersion: "2024-11-05",
-        capabilities: { tools: { listChanged: true } },
+        capabilities: {
+          tools: { listChanged: true },
+          resources: {}
+        },
         serverInfo: { name: "MCP-Bridge", version: "1.0.0" }
       }
     })}\n\n`);
 
-    sessions.set(sessionId, res);
+    sessions.set(sessionId, {
+      response: res,
+      createdAt: Date.now(),
+      lastActivityAt: Date.now(),
+      lastMethod: "connect",
+      messageCount: 0,
+      initialized: false,
+      userAgent: req.get("user-agent") || undefined,
+      remoteAddress: req.ip
+    });
     logger.info({ 
       sessionId, 
       setupTime: Date.now() - startTime 
@@ -158,7 +198,8 @@ async function startServer() {
 
   app.post("/messages", async (req, res) => {
     const sessionId = req.query.sessionId as string;
-    const session = sessions.get(sessionId);
+    const sessionState = sessions.get(sessionId);
+    const session = sessionState?.response;
     const message = req.body;
     const requestStartTime = Date.now();
 
@@ -170,18 +211,37 @@ async function startServer() {
       return res.status(404).json({ error: "Session not found" });
     }
 
+    sessionState.lastActivityAt = Date.now();
+    sessionState.lastMethod = message.method;
+    sessionState.messageCount += 1;
+    sessionState.lastError = undefined;
+
     try {
       switch (message.method) {
         case "initialize": {
           const startTime = Date.now();
+          sessionState.initialized = true;
           sendJsonRpcResponse(session, message.id, {
             protocolVersion: "2024-11-05",
-            capabilities: { tools: { listChanged: true } },
+            capabilities: {
+              tools: { listChanged: true },
+              resources: {}
+            },
             serverInfo: { name: "MCP-Bridge", version: "1.0.0" }
           });
           logger.info({ 
             method: "initialize", 
             duration: Date.now() - startTime 
+          }, "MCP method performance");
+          break;
+        }
+
+        case "resources/list": {
+          sendJsonRpcResponse(session, message.id, { resources: [] });
+          logger.info({
+            method: "resources/list",
+            duration: Date.now() - requestStartTime,
+            sessionId
           }, "MCP method performance");
           break;
         }
@@ -205,7 +265,8 @@ async function startServer() {
               return {
                 name: toolDefinition.name,
                 description: toolDefinition.description,
-                inputSchema: toolDefinition.inputSchema
+                inputSchema: toolDefinition.inputSchema,
+                outputSchema: toolDefinition.outputSchema
               };
             });
             const mapTime = Date.now() - mapStartTime;
@@ -251,8 +312,11 @@ async function startServer() {
 
           try {
             const result = await executeToolInternal(tool, args || {});
+            const returnValue = result.response.structuredData !== undefined
+              ? result.response.structuredData
+              : result.response.filteredData;
             const responsePayload: Record<string, any> = {
-              content: [{ type: "text", text: JSON.stringify(result.response.filteredData) }]
+              content: [{ type: "text", text: toJsonText(returnValue) }]
             };
 
             if (result.response.structuredData !== undefined) {
@@ -260,17 +324,26 @@ async function startServer() {
             }
 
             sendJsonRpcResponse(session, message.id, responsePayload);
+            logger.info({
+              method: "tools/call",
+              toolName: name,
+              duration: Date.now() - requestStartTime,
+              sessionId
+            }, "MCP method performance");
           } catch (error: any) {
+            sessionState.lastError = error.message;
             sendJsonRpcError(session, message.id, -32000, error.message);
           }
           break;
         }
 
         default: {
+          sessionState.lastError = `Method not found: ${message.method}`;
           sendJsonRpcError(session, message.id, -32601, `Method not found: ${message.method}`);
         }
       }
     } catch (error: any) {
+      sessionState.lastError = error.message;
       logger.error({ error, method: message.method }, "Error processing message");
       sendJsonRpcError(session, message.id, -32000, "Internal error");
     }
@@ -286,8 +359,23 @@ async function startServer() {
     res.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } })}\n\n`);
   }
 
+  const heartbeatInterval = setInterval(() => {
+    sessions.forEach((session, sessionId) => {
+      try {
+        session.response.write(`: ping ${Date.now()}\n\n`);
+      } catch (error: any) {
+        logger.warn({ sessionId, error: error?.message }, "Failed to send SSE heartbeat");
+        sessions.delete(sessionId);
+      }
+    });
+  }, 15000);
+
   function isTreeResponseField(field: any) {
     return Array.isArray(field?.children) || field?.name === "root";
+  }
+
+  function isFieldIncluded(field: any) {
+    return field?.includeInResponse !== false;
   }
 
   function normalizePathParts(path?: string) {
@@ -332,34 +420,125 @@ async function startServer() {
     return currentValue;
   }
 
-  function buildStructuredContent(tool: any, responseData: any, filteredData: any) {
-    if (!Array.isArray(tool.responseFields) || tool.responseFields.length === 0) {
-      if (filteredData && typeof filteredData === "object" && !Array.isArray(filteredData)) {
-        return filteredData;
-      }
+  function getRelativePath(parentPath: string | undefined, childPath: string | undefined) {
+    const childParts = normalizePathParts(childPath);
+    const parentParts = normalizePathParts(parentPath);
 
-      return undefined;
+    if (parentParts.length === 0) {
+      return childPath;
     }
 
-    if (isTreeResponseField(tool.responseFields[0])) {
-      const rootField = tool.responseFields[0];
+    const matchesPrefix = parentParts.every((part, index) => childParts[index] === part);
+    if (!matchesPrefix) {
+      return childPath;
+    }
+
+    const relativeParts = childParts.slice(parentParts.length);
+    if (relativeParts.length === 0) {
+      return "$";
+    }
+
+    return relativeParts.join(".");
+  }
+
+  function buildStructuredContent(tool: any, responseData: any, filteredData: any) {
+    if (!Array.isArray(tool.responseFields) || tool.responseFields.length === 0) {
+      return filteredData;
+    }
+
+    const extractFieldValue = (field: any, scopedSource: any, fallbackSource: any, parentPath?: string): any => {
+      const localPath = getRelativePath(parentPath, field.path);
+      const localValue = getValueByPath(scopedSource, localPath);
+      const fallbackValue = localValue !== undefined ? localValue : getValueByPath(fallbackSource, field.path);
+      const resolvedValue = localValue !== undefined ? localValue : fallbackValue;
+
+      if (field.type === "object") {
+        const objectValue = resolvedValue && typeof resolvedValue === "object" && !Array.isArray(resolvedValue)
+          ? resolvedValue
+          : {};
+        const nextObject: Record<string, any> = {};
+
+        (field.children || []).forEach((child: any) => {
+          if (!child?.name || child.name === "item" || !isFieldIncluded(child)) {
+            return;
+          }
+
+          const childValue = extractFieldValue(child, objectValue, fallbackValue, field.path);
+          if (childValue !== undefined) {
+            nextObject[child.name] = childValue;
+          }
+        });
+
+        return nextObject;
+      }
+
+      if (field.type === "array") {
+        const arrayValue = Array.isArray(resolvedValue) ? resolvedValue : [];
+        const itemField = (field.children || []).find((child: any) => child?.name === "item");
+
+        if (!itemField || !isFieldIncluded(itemField)) {
+          return arrayValue;
+        }
+
+        return arrayValue.map((item) => extractFieldValue(itemField, item, item, field.path));
+      }
+
+      return resolvedValue;
+    };
+
+    const rootField = tool.responseFields[0];
+
+    if (isTreeResponseField(rootField)) {
       const rootPath = rootField?.path || "$";
-      const valueFromFiltered = getValueByPath(filteredData, rootPath);
-      const value = valueFromFiltered !== undefined
-        ? valueFromFiltered
+      const rootScopedValue = getValueByPath(filteredData, rootPath);
+      const rootValue = rootScopedValue !== undefined
+        ? rootScopedValue
         : getValueByPath(responseData, rootPath);
 
       if (rootField?.name === "root") {
-        return value;
+        if (rootField.type === "array") {
+          const itemField = (rootField.children || []).find((child: any) => child?.name === "item");
+          const arrayValue = Array.isArray(rootValue) ? rootValue : [];
+
+          if (!itemField || !isFieldIncluded(itemField)) {
+            return arrayValue;
+          }
+
+          return arrayValue.map((item) => extractFieldValue(itemField, item, item, rootField.path));
+        }
+
+        if (rootField.type === "object") {
+          const objectValue = rootValue && typeof rootValue === "object" && !Array.isArray(rootValue) ? rootValue : {};
+          const nextObject: Record<string, any> = {};
+
+          (rootField.children || []).forEach((child: any) => {
+            if (!child?.name || child.name === "item" || !isFieldIncluded(child)) {
+              return;
+            }
+
+            const childValue = extractFieldValue(child, objectValue, rootValue, rootField.path);
+            if (childValue !== undefined) {
+              nextObject[child.name] = childValue;
+            }
+          });
+
+          return nextObject;
+        }
+
+        return rootValue;
       }
 
-      return { [rootField.name]: value };
+      if (!isFieldIncluded(rootField)) {
+        return undefined;
+      }
+
+      return { [rootField.name]: extractFieldValue(rootField, filteredData, responseData, "$") };
     }
 
     const structuredContent: Record<string, any> = {};
 
     tool.responseFields.forEach((field: any) => {
-      if (!field?.name) {
+      if (!field?.name || !isFieldIncluded(field)) {
         return;
       }
 
@@ -372,6 +551,10 @@ async function startServer() {
     });
 
     return structuredContent;
+  }
+
+  function toJsonText(value: any) {
+    return JSON.stringify(value === undefined ? null : value);
   }
 
   async function executeToolInternal(tool: any, values: any) {
@@ -495,9 +678,18 @@ async function startServer() {
     const { tool, values } = req.body;
     try {
       const result = await executeToolInternal(tool, values);
+      const returnValue = result.response.structuredData !== undefined
+        ? result.response.structuredData
+        : result.response.filteredData;
       res.json({
         request: { url: tool.url, method: tool.method, headers: tool.headers, body: tool.body },
-        response: { status: result.response.status, filteredData: result.response.filteredData }
+        response: {
+          status: result.response.status,
+          data: result.response.filteredData,
+          filteredData: result.response.filteredData,
+          structuredData: result.response.structuredData,
+          returnValue
+        }
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -532,6 +724,7 @@ async function startServer() {
 
   const gracefulShutdown = (signal: string) => {
     logger.info({ signal }, "Shutting down gracefully...");
+    clearInterval(heartbeatInterval);
     server.close(() => {
       logger.info("HTTP server closed");
       if (db) {

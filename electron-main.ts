@@ -64,6 +64,158 @@ function getValueByPath(source: any, path?: string) {
   return currentValue;
 }
 
+function normalizePathParts(path?: string) {
+  if (!path || path === '$' || path === '$.') {
+    return [];
+  }
+
+  return path
+    .replace(/^\$\./, '')
+    .replace(/^\$/, '')
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function getRelativePath(parentPath: string | undefined, childPath: string | undefined) {
+  const childParts = normalizePathParts(childPath);
+  const parentParts = normalizePathParts(parentPath);
+
+  if (parentParts.length === 0) {
+    return childPath;
+  }
+
+  const matchesPrefix = parentParts.every((part, index) => childParts[index] === part);
+  if (!matchesPrefix) {
+    return childPath;
+  }
+
+  const relativeParts = childParts.slice(parentParts.length);
+  if (relativeParts.length === 0) {
+    return '$';
+  }
+
+  return relativeParts.join('.');
+}
+
+function isFieldIncluded(field: any) {
+  return field?.includeInResponse !== false;
+}
+
+function buildStructuredContent(tool: any, responseData: any, filteredData: any) {
+  if (!Array.isArray(tool.responseFields) || tool.responseFields.length === 0) {
+    return filteredData;
+  }
+
+  const extractFieldValue = (field: any, scopedSource: any, fallbackSource: any, parentPath?: string): any => {
+    const localPath = getRelativePath(parentPath, field.path);
+    const localValue = getValueByPath(scopedSource, localPath);
+    const fallbackValue = localValue !== undefined ? localValue : getValueByPath(fallbackSource, field.path);
+    const resolvedValue = localValue !== undefined ? localValue : fallbackValue;
+
+    if (field.type === 'object') {
+      const objectValue = resolvedValue && typeof resolvedValue === 'object' && !Array.isArray(resolvedValue)
+        ? resolvedValue
+        : {};
+      const nextObject: Record<string, any> = {};
+
+      (field.children || []).forEach((child: any) => {
+        if (!child?.name || child.name === 'item' || !isFieldIncluded(child)) {
+          return;
+        }
+
+        const childValue = extractFieldValue(child, objectValue, fallbackValue, field.path);
+        if (childValue !== undefined) {
+          nextObject[child.name] = childValue;
+        }
+      });
+
+      return nextObject;
+    }
+
+    if (field.type === 'array') {
+      const arrayValue = Array.isArray(resolvedValue) ? resolvedValue : [];
+      const itemField = (field.children || []).find((child: any) => child?.name === 'item');
+
+      if (!itemField || !isFieldIncluded(itemField)) {
+        return arrayValue;
+      }
+
+      return arrayValue.map((item: any) => extractFieldValue(itemField, item, item, field.path));
+    }
+
+    return resolvedValue;
+  };
+
+  const rootField = tool.responseFields[0];
+  const isTree = Array.isArray(rootField?.children) || rootField?.name === 'root';
+
+  if (isTree) {
+    const rootPath = rootField?.path || '$';
+    const rootScopedValue = getValueByPath(filteredData, rootPath);
+    const rootValue = rootScopedValue !== undefined
+      ? rootScopedValue
+      : getValueByPath(responseData, rootPath);
+
+    if (rootField?.name === 'root') {
+      if (rootField.type === 'array') {
+        const itemField = (rootField.children || []).find((child: any) => child?.name === 'item');
+        const arrayValue = Array.isArray(rootValue) ? rootValue : [];
+
+        if (!itemField || !isFieldIncluded(itemField)) {
+          return arrayValue;
+        }
+
+        return arrayValue.map((item: any) => extractFieldValue(itemField, item, item, rootField.path));
+      }
+
+      if (rootField.type === 'object') {
+        const objectValue = rootValue && typeof rootValue === 'object' && !Array.isArray(rootValue) ? rootValue : {};
+        const nextObject: Record<string, any> = {};
+
+        (rootField.children || []).forEach((child: any) => {
+          if (!child?.name || child.name === 'item' || !isFieldIncluded(child)) {
+            return;
+          }
+
+          const childValue = extractFieldValue(child, objectValue, rootValue, rootField.path);
+          if (childValue !== undefined) {
+            nextObject[child.name] = childValue;
+          }
+        });
+
+        return nextObject;
+      }
+
+      return rootValue;
+    }
+
+    if (!isFieldIncluded(rootField)) {
+      return undefined;
+    }
+
+    return { [rootField.name]: extractFieldValue(rootField, filteredData, responseData, '$') };
+  }
+
+  const structuredContent: Record<string, any> = {};
+
+  tool.responseFields.forEach((field: any) => {
+    if (!field?.name || !isFieldIncluded(field)) {
+      return;
+    }
+
+    const valueFromFiltered = getValueByPath(filteredData, field.path);
+    const value = valueFromFiltered !== undefined
+      ? valueFromFiltered
+      : getValueByPath(responseData, field.path);
+
+    structuredContent[field.name] = value;
+  });
+
+  return structuredContent;
+}
+
 function writeLog(message: string, payload?: unknown) {
   const detail = payload ? ` ${util.inspect(payload, { depth: 4 })}` : '';
   const line = `[${new Date().toISOString()}] ${message}${detail}`;
@@ -261,10 +413,25 @@ function registerIpcHandlers() {
 
   ipcMain.handle('get-server-status', async () => {
     const service = await getToolService();
+    try {
+      const response = await fetch(`http://127.0.0.1:${defaultServerPort}/api/status`);
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          ...data,
+          serverPort: defaultServerPort,
+          host: getLocalIpAddress(),
+        };
+      }
+    } catch {
+    }
+
     return {
       activeConnections: 0,
       uptime: process.uptime(),
       toolsCount: service.getAll().length,
+      toolsVersion: 0,
+      sessions: [],
       serverPort: defaultServerPort,
       host: getLocalIpAddress(),
     };
@@ -304,9 +471,12 @@ function registerIpcHandlers() {
         }
       }
 
+      const structuredData = buildStructuredContent(tool, data, filteredData);
+      const returnValue = structuredData !== undefined ? structuredData : filteredData;
+
       return {
         request: { url: finalUrl, method: tool.method, headers, body: finalBody },
-        response: { status: response.status, data, filteredData }
+        response: { status: response.status, data, filteredData, structuredData, returnValue }
       };
     } catch (error: any) {
       return { error: error.message };

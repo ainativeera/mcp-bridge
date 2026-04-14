@@ -215,6 +215,7 @@ function createResponseField(overrides: Partial<MCPResponseField> = {}): MCPResp
     type: 'string',
     description: '',
     required: false,
+    includeInResponse: true,
     example: '',
     children: [],
     ...overrides
@@ -327,6 +328,7 @@ function ensureResponseFieldIds(fields: MCPResponseField[]): MCPResponseField[] 
     ...field,
     id: field.id || createFieldId(),
     required: field.required ?? false,
+    includeInResponse: field.includeInResponse ?? true,
     children: ensureResponseFieldIds(field.children || [])
   }));
 }
@@ -464,11 +466,12 @@ function ResponseFieldTreeEditor({
     const canHaveChildren = field.type === 'object' || field.type === 'array';
     const isArrayItemNode = parent?.type === 'array' && field.name === 'item';
     const isReadonlyName = isRoot || isArrayItemNode;
+    const canToggleInclude = !isRoot;
 
     return (
       <div key={field.id || field.path} className="space-y-1.5">
         <div
-          className="grid grid-cols-[minmax(0,2.2fr)_88px_0.9fr_1.1fr_64px] items-center gap-2 rounded-lg bg-transparent px-1 py-0.5"
+          className="grid grid-cols-[minmax(0,2.1fr)_88px_88px_0.9fr_1.1fr_64px] items-center gap-2 rounded-lg bg-transparent px-1 py-0.5"
           style={{ marginLeft: depth * 12 }}
         >
           <div>
@@ -509,6 +512,19 @@ function ResponseFieldTreeEditor({
               <option value="number">number</option>
               <option value="boolean">boolean</option>
             </select>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <input
+                type="checkbox"
+                checked={field.includeInResponse !== false}
+                onChange={(e) => field.id && onUpdate(field.id, { includeInResponse: e.target.checked })}
+                disabled={!canToggleInclude}
+                className="h-3.5 w-3.5 rounded border-zinc-700 bg-zinc-900 text-purple-500 focus:ring-purple-500 disabled:opacity-40"
+              />
+              <span>{canToggleInclude ? '返回' : '根节点'}</span>
+            </label>
           </div>
 
           <input
@@ -562,9 +578,10 @@ function ResponseFieldTreeEditor({
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-[minmax(0,2.2fr)_88px_0.9fr_1.1fr_64px] gap-2 px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+      <div className="grid grid-cols-[minmax(0,2.1fr)_88px_88px_0.9fr_1.1fr_64px] gap-2 px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
         <div>字段名</div>
         <div>类型</div>
+        <div>返回给调用端</div>
         <div>示例</div>
         <div>说明</div>
         <div className="text-right">操作</div>
@@ -587,6 +604,18 @@ export default function App() {
 }
 
 function AppContent() {
+  type McpSessionStatus = {
+    sessionId: string;
+    createdAt: number;
+    lastActivityAt: number;
+    lastMethod: string;
+    messageCount: number;
+    initialized: boolean;
+    userAgent?: string;
+    remoteAddress?: string;
+    lastError?: string;
+  };
+
   const [appInfo, setAppInfo] = useState<{
     isDesktop: boolean;
     platform: string;
@@ -609,7 +638,7 @@ function AppContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
-  const [activeTab, setActiveTab] = useState<'params' | 'headers' | 'body' | 'filter' | 'output'>('params');
+  const [activeTab, setActiveTab] = useState<'params' | 'query' | 'headers' | 'body' | 'output' | 'logs'>('params');
   const [executionResult, setExecutionResult] = useState<any>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [testValues, setTestValues] = useState<Record<string, any>>({});
@@ -623,9 +652,18 @@ function AppContent() {
   const [editingName, setEditingName] = useState('');
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [serverStatus, setServerStatus] = useState({ activeConnections: 0, uptime: 0, toolsCount: 0 });
+  const [serverStatus, setServerStatus] = useState<{
+    activeConnections: number;
+    uptime: number;
+    toolsCount: number;
+    toolsVersion?: number;
+    sessions?: McpSessionStatus[];
+    serverPort?: number;
+    host?: string;
+  }>({ activeConnections: 0, uptime: 0, toolsCount: 0, sessions: [] });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [globalSettings, setGlobalSettings] = useState<{ globalHeaders: { key: string; value: string }[]; proxyUrl: string; apiKey: string }>({
     globalHeaders: [],
     proxyUrl: '',
@@ -915,6 +953,50 @@ function AppContent() {
       setIsExecuting(false);
     }
   };
+
+  const formatRequestBody = () => {
+    if (!activeTool) return;
+
+    try {
+      const formatted = JSON.stringify(JSON.parse(activeTool.body), null, 2);
+      handleUpdateTool({ body: formatted });
+    } catch {
+      alert('当前请求体不是有效的 JSON，暂时无法格式化。');
+    }
+  };
+
+  const getDebugResponsePayload = () => {
+    if (!executionResult) return undefined;
+    if (executionResult.error !== undefined) return executionResult.error;
+
+    const response = executionResult.response;
+    if (!response) return undefined;
+    if (response.returnValue !== undefined) return response.returnValue;
+    if (response.filteredData !== undefined) return response.filteredData;
+    if (response.data !== undefined) return response.data;
+    return response;
+  };
+
+  const debugResponsePayload = getDebugResponsePayload();
+  const debugResponseText = debugResponsePayload === undefined
+    ? ''
+    : typeof debugResponsePayload === 'string'
+      ? debugResponsePayload
+      : JSON.stringify(debugResponsePayload, null, 2);
+
+  const formatRelativeTime = (timestamp?: number) => {
+    if (!timestamp) return '无活动';
+    const diffSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    if (diffSeconds < 5) return '刚刚';
+    if (diffSeconds < 60) return `${diffSeconds}s 前`;
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes}m 前`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    return `${diffHours}h 前`;
+  };
+
+  const visibleSessions = (serverStatus.sessions || []).slice(0, 1);
+  const hiddenSessionCount = Math.max(0, (serverStatus.sessions || []).length - visibleSessions.length);
 
   const parseCurl = async (curlString: string) => {
     try {
@@ -1355,7 +1437,7 @@ function AppContent() {
                           onChange={(e) => setEditingName(e.target.value)}
                           onBlur={() => handleRename(tool)}
                           onKeyDown={(e) => e.key === 'Enter' && handleRename(tool)}
-                          className="w-full bg-zinc-800 text-white text-xs px-2 py-1.5 rounded outline-none ring-1 ring-purple-500"
+                          className="w-full bg-zinc-800 text-zinc-100 text-xs px-2 py-1.5 rounded outline-none ring-1 ring-purple-500"
                         />
                       ) : (
                         <div
@@ -1366,7 +1448,7 @@ function AppContent() {
                           onKeyDown={(e) => e.key === 'Enter' && setActiveToolId(tool.id)}
                           className={cn(
                             "w-full flex items-center gap-2 p-2 rounded-lg text-xs transition-all cursor-pointer outline-none",
-                            activeToolId === tool.id ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                            activeToolId === tool.id ? "bg-zinc-800 text-zinc-100 shadow-sm" : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
                           )}
                         >
                           <MethodBadge method={tool.method} />
@@ -1478,7 +1560,7 @@ function AppContent() {
                   value={activeTool.description}
                   onChange={(e) => handleUpdateTool({ description: e.target.value })}
                   placeholder="例如：根据订单号查询订单详情，适合在用户已经提供订单号后调用。返回订单状态、金额、收货信息等结构化数据。"
-                  className="w-full min-h-[108px] resize-none rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
+                  className="w-full min-h-[76px] resize-none rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-zinc-300 outline-none focus:ring-1 focus:ring-purple-500"
                 />
               </div>
 
@@ -1515,8 +1597,7 @@ function AppContent() {
                     { id: 'query', label: 'Params (URL)', icon: Link2 },
                     { id: 'headers', label: '请求头', icon: ShieldCheck },
                     { id: 'body', label: '请求体', icon: Code },
-                    { id: 'filter', label: '响应处理', icon: FileJson },
-                    { id: 'output', label: '返回值说明', icon: Sparkles },
+                    { id: 'output', label: '响应处理', icon: FileJson },
                     { id: 'logs', label: '调用日志', icon: History },
                   ].map(tab => (
                     <button
@@ -1739,28 +1820,37 @@ function AppContent() {
                           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">JSON Body</span>
                           <Badge variant="purple">JSON</Badge>
                         </div>
-                        <button 
-                          onClick={() => {
-                            try {
-                              const json = JSON.parse(activeTool.body);
-                              let newBody = activeTool.body;
-                              Object.entries(json).forEach(([key, value]) => {
-                                if (typeof value === 'string' && !String(value).includes('{{')) {
-                                  newBody = newBody.replace(`"${key}": "${value}"`, `"${key}": "{{${key}}}"`);
-                                } else if (typeof value !== 'object' && !String(value).includes('{{')) {
-                                  newBody = newBody.replace(`"${key}": ${value}`, `"${key}": "{{${key}}}"`);
-                                }
-                              });
-                              handleUpdateTool({ body: newBody });
-                            } catch (e) {
-                              alert('Body 不是有效的 JSON，无法自动提取参数');
-                            }
-                          }}
-                          className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/40 transition-all flex items-center gap-1"
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          自动变参
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={formatRequestBody}
+                            className="text-[10px] bg-zinc-700/70 text-zinc-300 px-2 py-1 rounded hover:bg-zinc-700 transition-all flex items-center gap-1"
+                          >
+                            <Code className="w-3 h-3" />
+                            格式化
+                          </button>
+                          <button 
+                            onClick={() => {
+                              try {
+                                const json = JSON.parse(activeTool.body);
+                                let newBody = activeTool.body;
+                                Object.entries(json).forEach(([key, value]) => {
+                                  if (typeof value === 'string' && !String(value).includes('{{')) {
+                                    newBody = newBody.replace(`"${key}": "${value}"`, `"${key}": "{{${key}}}"`);
+                                  } else if (typeof value !== 'object' && !String(value).includes('{{')) {
+                                    newBody = newBody.replace(`"${key}": ${value}`, `"${key}": "{{${key}}}"`);
+                                  }
+                                });
+                                handleUpdateTool({ body: newBody });
+                              } catch (e) {
+                                alert('Body 不是有效的 JSON，无法自动提取参数');
+                              }
+                            }}
+                            className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/40 transition-all flex items-center gap-1"
+                          >
+                            <Sparkles className="w-3 h-3" />
+                            自动变参
+                          </button>
+                        </div>
                       </div>
                       <textarea 
                         value={activeTool.body}
@@ -1771,10 +1861,10 @@ function AppContent() {
                     </div>
                   )}
 
-                  {activeTab === 'filter' && (
+                  {activeTab === 'output' && (
                     <div className="space-y-4">
                       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">提取 JSONPath (选填)</label>
                           <input 
                             type="text" 
@@ -1783,20 +1873,14 @@ function AppContent() {
                             placeholder="例如: data.result"
                             className="w-full bg-zinc-800 border-none rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-1 focus:ring-purple-500"
                           />
+                          <p className="text-xs text-zinc-500 leading-relaxed">
+                            先用 JSONPath 把原始响应裁成核心片段，再按下方字段树决定哪些属性返回给调用端。最终发送给调用端的内容会保持 JSON 格式。
+                          </p>
                         </div>
-                        <p className="text-xs text-zinc-500 leading-relaxed">
-                          普通用户不需要大模型看到几万行的 JSON。通过 JSONPath 提取核心数据，可以显著降低 Token 消耗并提高 AI 响应速度。
-                        </p>
-                      </div>
-                    </div>
-                  )}
 
-                  {activeTab === 'output' && (
-                    <div className="space-y-4">
-                      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">返回值字段说明</label>
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">返回值字段与返回开关</label>
                           </div>
                           <button 
                             onClick={() => addResponseChildField()}
@@ -1825,10 +1909,12 @@ function AppContent() {
                         <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-3 space-y-2">
                           <div className="flex items-center gap-2 text-purple-400">
                             <Sparkles className="w-3.5 h-3.5" />
-                            <span className="text-xs font-medium">为什么要填写返回值说明？</span>
+                            <span className="text-xs font-medium">这个区域现在怎么工作？</span>
                           </div>
                           <ul className="text-[10px] text-zinc-500 space-y-1 ml-5">
-                            <li>• 大模型可以通过树形字段说明理解整个响应结构</li>
+                            <li>• JSONPath 决定从原始响应里提取哪一段作为后续处理输入</li>
+                            <li>• 勾选“返回”表示该字段会真正返回给调用端，默认勾选</li>
+                            <li>• 没勾选的字段只作为结构说明存在，不会出现在最终返回 JSON 中</li>
                             <li>• `object` 和 `array` 节点可以继续展开子字段</li>
                             <li>• 路径会在内部自动维护，界面上无需手写 `[0].name`</li>
                           </ul>
@@ -1983,6 +2069,78 @@ function AppContent() {
                   <pre className="mt-3 whitespace-pre-wrap text-[12px] leading-6 text-zinc-300">
                     {mcpToolPreview?.description || '这里会根据工具描述、参数说明和返回字段自动生成更清晰的 MCP 摘要。'}
                   </pre>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Session Monitor Modal */}
+      <AnimatePresence>
+        {isSessionModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSessionModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+            >
+              <div className="p-6 space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-zinc-100">MCP 会话监控</span>
+                      <Badge variant="default">{serverStatus.sessions?.length || 0} 条</Badge>
+                    </div>
+                    <p className="text-sm text-zinc-500">查看当前活跃 SSE 会话的初始化状态、最近方法和最后活动时间。</p>
+                  </div>
+                  <button
+                    onClick={() => setIsSessionModalOpen(false)}
+                    className="rounded-lg p-2 transition-colors hover:bg-zinc-800"
+                  >
+                    <XCircle className="w-5 h-5 text-zinc-500" />
+                  </button>
+                </div>
+
+                <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
+                  {(serverStatus.sessions || []).length > 0 ? (
+                    (serverStatus.sessions || []).map((session) => (
+                      <div key={session.sessionId} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <code className="text-xs text-zinc-300 font-mono break-all">{session.sessionId}</code>
+                          <span className={cn(
+                            "text-[10px] font-bold shrink-0",
+                            session.initialized ? "text-emerald-400" : "text-amber-400"
+                          )}>
+                            {session.initialized ? '已初始化' : '待初始化'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-500">
+                          <div>最近方法：<span className="font-mono text-zinc-300">{session.lastMethod}</span></div>
+                          <div>最后活动：<span className="text-zinc-300">{formatRelativeTime(session.lastActivityAt)}</span></div>
+                          <div>消息数：<span className="text-zinc-300">{session.messageCount}</span></div>
+                          <div>来源：<span className="text-zinc-300">{session.remoteAddress || 'unknown ip'}</span></div>
+                        </div>
+                        {session.lastError && (
+                          <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                            {session.lastError}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm text-zinc-500">
+                      当前没有活跃的 MCP SSE 会话。
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -2288,7 +2446,6 @@ function AppContent() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* Mock AI Call Form */}
           <div className="space-y-3">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">模拟大模型调用参数</label>
             {activeTool?.parameters.length ? (
@@ -2311,61 +2468,103 @@ function AppContent() {
             )}
           </div>
 
-          {/* Results */}
-          {executionResult && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Request</label>
-                  <Badge variant="default">HTTP</Badge>
-                </div>
-                <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800 overflow-x-auto">
-                  <pre className="text-[10px] font-mono text-zinc-400">
-                    {executionResult.request?.method} {executionResult.request?.url}
-                  </pre>
-                </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Request</label>
+                <Badge variant="default">HTTP</Badge>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Response</label>
-                    <Badge variant={executionResult.response?.status < 400 ? 'success' : 'warning'}>
-                      {executionResult.response?.status || 'Error'}
-                    </Badge>
+              <div className="bg-zinc-950 rounded-xl p-3 border border-zinc-800 space-y-2">
+                <div className="text-[10px] font-mono text-zinc-300 break-all">
+                  {activeTool ? `${activeTool.method} ${activeTool.url}` : '未选择工具'}
+                </div>
+                {activeTool?.responseFilter ? (
+                  <div className="text-[10px] text-zinc-500 break-all">
+                    JSONPath: <span className="font-mono text-zinc-400">{activeTool.responseFilter}</span>
                   </div>
-                  {!executionResult.error && executionResult.response?.filteredData && (
-                    <button 
-                      onClick={() => {
-                        const filteredData = executionResult.response?.filteredData;
-                        if (filteredData !== undefined) {
-                          const parsedFields = [parseResponseToFieldTree(filteredData)];
-                          handleUpdateTool({ responseFields: parsedFields });
-                          setActiveTab('output');
-                        } else {
-                          alert('无法解析返回数据');
-                        }
-                      }}
-                      className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/40 transition-all flex items-center gap-1"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      智能识别返回字段
-                    </button>
-                  )}
-                </div>
-                <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800 overflow-x-auto max-h-64">
-                  <pre className="text-[10px] font-mono text-emerald-400">
-                    {JSON.stringify(executionResult.response?.filteredData || executionResult.error, null, 2)}
-                  </pre>
-                </div>
+                ) : (
+                  <div className="text-[10px] text-zinc-600">未配置 JSONPath，将直接基于整个接口响应构造返回 JSON</div>
+                )}
               </div>
             </div>
-          )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Response</label>
+                  {executionResult ? (
+                    <Badge variant={executionResult.error ? 'warning' : executionResult.response?.status < 400 ? 'success' : 'warning'}>
+                      {executionResult.error ? 'Error' : executionResult.response?.status || 'Done'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="default">Idle</Badge>
+                  )}
+                </div>
+                {!executionResult?.error && (executionResult?.response?.filteredData !== undefined || executionResult?.response?.returnValue !== undefined) && (
+                  <button
+                    onClick={() => {
+                      const sourceData = executionResult.response?.filteredData ?? executionResult.response?.returnValue;
+                      if (sourceData !== undefined) {
+                        const parsedFields = [parseResponseToFieldTree(sourceData)];
+                        handleUpdateTool({ responseFields: parsedFields });
+                        setActiveTab('output');
+                      } else {
+                        alert('无法解析返回数据');
+                      }
+                    }}
+                    className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/40 transition-all flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    智能识别返回字段
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-zinc-950 rounded-xl border border-zinc-800 overflow-hidden">
+                <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    {executionResult?.error ? 'Error Payload' : executionResult ? 'JSON Payload' : 'Waiting'}
+                  </span>
+                  {executionResult?.request?.url && (
+                    <span className="text-[10px] text-zinc-600 font-mono truncate max-w-36">
+                      {executionResult.request.method}
+                    </span>
+                  )}
+                </div>
+
+                {isExecuting ? (
+                  <div className="p-4 text-xs text-zinc-500 flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    正在请求接口并解析返回...
+                  </div>
+                ) : executionResult ? (
+                  debugResponseText ? (
+                    <div className="max-h-80 overflow-auto p-3">
+                      <pre className={cn(
+                        "text-[10px] font-mono whitespace-pre",
+                        executionResult.error ? "text-rose-400" : "text-emerald-400"
+                      )}>
+                        {debugResponseText}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="p-4 text-xs text-zinc-500">
+                      本次调用已完成，但没有可展示的 JSON 内容。
+                    </div>
+                  )
+                ) : (
+                  <div className="p-4 text-xs text-zinc-600">
+                    运行测试后，这里会展示当前工具的返回结果。
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* MCP Server Status Card */}
-        <div className="p-4 border-t border-zinc-800 bg-zinc-900/50">
-          <div className="bg-zinc-800/50 rounded-xl p-3 border border-zinc-700 space-y-3">
+        <div className="p-4 border-t border-zinc-800 bg-zinc-900/35">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">MCP 服务器状态</span>
               <div className="flex items-center gap-1.5">
@@ -2389,11 +2588,71 @@ function AppContent() {
                   {copySuccess ? "已复制" : "复制配置"}
                 </button>
               </div>
-              <div className="bg-black/40 rounded px-2 py-1.5 border border-zinc-800/50">
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2 py-1.5">
                 <code className="text-[10px] text-zinc-400 font-mono break-all leading-relaxed">
                   {mcpUrl}
                 </code>
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-zinc-600 font-bold uppercase">会话监控</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-zinc-500">
+                    Tools v{serverStatus.toolsVersion ?? 0}
+                  </span>
+                  {(serverStatus.sessions?.length || 0) > 1 && (
+                    <button
+                      onClick={() => setIsSessionModalOpen(true)}
+                      className="text-[9px] text-purple-400 hover:text-purple-300 font-bold transition-colors"
+                    >
+                      查看全部
+                    </button>
+                  )}
+                </div>
+              </div>
+              {serverStatus.sessions && serverStatus.sessions.length > 0 ? (
+                <div className="space-y-2">
+                  {visibleSessions.map((session) => (
+                    <div key={session.sessionId} className="rounded-lg border border-zinc-800 bg-zinc-950/55 px-2.5 py-2 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="text-[10px] text-zinc-300 font-mono truncate">
+                          {session.sessionId.slice(0, 8)}
+                        </code>
+                        <span className={cn(
+                          "text-[9px] font-bold",
+                          session.initialized ? "text-emerald-400" : "text-amber-400"
+                        )}>
+                          {session.initialized ? '已初始化' : '待初始化'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                        <span className="font-mono">{session.lastMethod}</span>
+                        <span>{formatRelativeTime(session.lastActivityAt)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-zinc-600">
+                        <span>{session.messageCount} 条消息</span>
+                        <span>{session.remoteAddress || 'unknown ip'}</span>
+                      </div>
+                      {session.lastError && (
+                        <div className="text-[10px] text-rose-400 leading-relaxed">
+                          {session.lastError}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {hiddenSessionCount > 0 && (
+                    <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/35 px-2.5 py-2 text-[10px] text-zinc-500">
+                      另外还有 {hiddenSessionCount} 个会话，点击“查看全部”查看。
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-2.5 py-2 text-[10px] text-zinc-600">
+                  当前没有活跃的 MCP SSE 会话。
+                </div>
+              )}
             </div>
 
             <p className="text-[9px] text-zinc-600 leading-relaxed italic">

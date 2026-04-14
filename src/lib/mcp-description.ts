@@ -1,5 +1,18 @@
 import type { MCPParameter, MCPResponseField, MCPTool } from '../types';
 
+function isFieldIncluded(field: MCPResponseField) {
+  return field.includeInResponse !== false;
+}
+
+function filterIncludedResponseFields(fields: MCPResponseField[]): MCPResponseField[] {
+  return (fields || [])
+    .filter((field) => field?.name === 'root' || isFieldIncluded(field))
+    .map((field) => ({
+      ...field,
+      children: filterIncludedResponseFields(field.children || [])
+    }));
+}
+
 function flattenResponseFieldTree(fields: MCPResponseField[], result: MCPResponseField[] = []) {
   fields.forEach((field) => {
     if (field.name !== 'root') {
@@ -13,7 +26,7 @@ function flattenResponseFieldTree(fields: MCPResponseField[], result: MCPRespons
 }
 
 export function getResponseFieldSummary(responseFields: MCPResponseField[]) {
-  return flattenResponseFieldTree(responseFields || []).filter((field) => !['root', 'item'].includes(field.name));
+  return flattenResponseFieldTree(filterIncludedResponseFields(responseFields || [])).filter((field) => !['root', 'item'].includes(field.name));
 }
 
 function responseFieldToSchema(field: MCPResponseField): any {
@@ -57,11 +70,13 @@ function responseFieldToSchema(field: MCPResponseField): any {
 }
 
 export function buildMcpOutputSchema(responseFields: MCPResponseField[]) {
-  if (!Array.isArray(responseFields) || responseFields.length === 0) {
+  const includedFields = filterIncludedResponseFields(responseFields || []);
+
+  if (!Array.isArray(includedFields) || includedFields.length === 0) {
     return undefined;
   }
 
-  const firstField = responseFields[0];
+  const firstField = includedFields[0];
   const hasTreeShape = Array.isArray(firstField?.children) || firstField?.name === 'root';
 
   if (hasTreeShape) {
@@ -71,7 +86,7 @@ export function buildMcpOutputSchema(responseFields: MCPResponseField[]) {
     return {
       type: 'object',
       properties: Object.fromEntries(
-        responseFields
+        includedFields
           .filter((field) => field?.name)
           .map((field) => [field.name, responseFieldToSchema(field)])
       )
@@ -79,7 +94,7 @@ export function buildMcpOutputSchema(responseFields: MCPResponseField[]) {
   }
 
   const properties: Record<string, any> = {};
-  responseFields.forEach((field) => {
+  includedFields.forEach((field) => {
     if (field?.name) {
       properties[field.name] = {
         type: field.type,
